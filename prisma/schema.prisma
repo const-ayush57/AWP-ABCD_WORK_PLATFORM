@@ -1,0 +1,77 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+model User {
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  username      String        @unique
+  password      String        // Hashed
+  plainPassword String?       // To allow admin to view member passwords
+  name          String
+  role          Role          @default(MEMBER)
+  isOnline      Boolean?      @default(false)
+  lastSeen      DateTime?     @default(now())
+  transactions  Transaction[] // Tracks which member did which job
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model JobTemplate {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  title       String      // e.g., "Xerox/Printing"
+  basePrice   Float       @default(0.0)
+  category    String?     // e.g., "Stationary", "Digital"
+  options     JobOption[] // e.g., "Color", "Double Sided"
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+}
+
+model JobOption {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  name          String      // e.g., "Full Color"
+  additionalCost Float      @default(0.0)
+  jobTemplate   JobTemplate @relation(fields: [jobTemplateId], references: [id], onDelete: Cascade)
+  jobTemplateId String      @db.ObjectId
+}
+
+model Transaction {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  transactionRef  String      @unique // We will generate a custom readable ID like "JOB-12345"
+  customerName    String?
+  customerPhone   String?
+  
+  // The specific job performed
+  jobTitle        String      // Snapshot of title at time of purchase
+  totalAmount     Float
+  status          OrderStatus @default(PAID)
+
+  // Relations
+  member          User        @relation(fields: [memberId], references: [id])
+  memberId        String      @db.ObjectId
+  
+  // Metadata
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([memberId])
+  @@index([createdAt])
+}
