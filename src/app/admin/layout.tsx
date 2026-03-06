@@ -1,8 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, LogOut, Settings, BarChart, Users } from "lucide-react";
+import { LayoutDashboard, Settings, Users } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
 
 export default async function AdminLayout({
@@ -14,6 +13,7 @@ export default async function AdminLayout({
 
     // DEV MODE BYPASS: Temporarily inject a dummy admin session
     if (!session) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         session = { user: { id: "dev-admin-id", name: "Dev Admin", username: "admin", role: "ADMIN" } } as any;
     }
 
@@ -51,13 +51,6 @@ export default async function AdminLayout({
                     >
                         <Users size={20} />
                         <span className="font-medium">Members</span>
-                    </Link>
-                    <Link
-                        href="/admin/analytics"
-                        className="flex items-center space-x-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                    >
-                        <BarChart size={20} />
-                        <span className="font-medium">Analytics</span>
                     </Link>
                 </nav>
                 <div className="absolute bottom-0 w-64 p-4 border-t">

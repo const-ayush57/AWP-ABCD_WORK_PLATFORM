@@ -82,6 +82,7 @@ export default async function JobManagerPage() {
                                 <TableCell>₹{job.basePrice.toFixed(2)}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-col space-y-2">
+                                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                                         {job.options.map((opt: any) => (
                                             <span key={opt.id} className="text-sm bg-gray-100 rounded px-2 py-1 inline-block w-max">
                                                 {opt.name} (+₹{opt.additionalCost})

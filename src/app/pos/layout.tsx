@@ -1,7 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { SignOutButton } from "@/components/SignOutButton";
 
@@ -10,7 +9,7 @@ export default async function POSLayout({
 }: {
     children: React.ReactNode;
 }) {
-    let session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions);
 
     if (!session || (session.user.role !== "MEMBER" && session.user.role !== "ADMIN")) {
         redirect("/login");

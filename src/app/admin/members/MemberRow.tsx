@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { TableRow, TableCell } from "@/components/ui/table";
 import { Eye, EyeOff, Trash2 } from "lucide-react";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function MemberRow({ member, deleteMember }: { member: any, deleteMember: (formData: FormData) => void }) {
     const [showPassword, setShowPassword] = useState(false);
 

@@ -1,5 +1,4 @@
 import prisma from "@/lib/prisma";
-import { User } from "@prisma/client";
 import { MemberDialog } from "./MemberDialog";
 import { MemberRow } from "./MemberRow";
 import {
@@ -91,6 +90,7 @@ export default async function MembersPage() {
                                 </TableCell>
                             </TableRow>
                         )}
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {members.map((member: any) => (
                             <MemberRow key={member.id} member={member} deleteMember={deleteMember} />
                         ))}

@@ -5,8 +5,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Lock, Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -14,13 +15,11 @@ export default function LoginPage() {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError("");
 
         const res = await signIn("credentials", {
             username,
@@ -29,7 +28,7 @@ export default function LoginPage() {
         });
 
         if (res?.error) {
-            setError("Invalid credentials. Please try again.");
+            toast.error("Invalid credentials", { description: "Please check your ID and password and try again." });
             setIsLoading(false);
         } else {
             // Fetch session to determine role and prevent wrong routing
@@ -39,14 +38,16 @@ export default function LoginPage() {
             const role = sessionData?.user?.role;
 
             if (loginType === "admin" && role !== "ADMIN") {
-                setError("Access Denied: You do not have admin privileges.");
+                toast.error("Access Denied", { description: "You do not have administrative privileges for Mission Control." });
                 setIsLoading(false);
                 return;
             }
 
             if (role === "ADMIN") {
+                toast.success("Authentication Verified", { description: "Accessing Mission Control..." });
                 router.push("/admin");
             } else {
+                toast.success("Authentication Verified", { description: "Initializing Point of Sale Terminal..." });
                 router.push("/pos");
             }
             router.refresh();
@@ -68,14 +69,14 @@ export default function LoginPage() {
                     <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
                         <button
                             type="button"
-                            onClick={() => { setLoginType("member"); setError(""); }}
+                            onClick={() => { setLoginType("member"); }}
                             className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${loginType === "member" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
                         >
                             POS Staff
                         </button>
                         <button
                             type="button"
-                            onClick={() => { setLoginType("admin"); setError(""); }}
+                            onClick={() => { setLoginType("admin"); }}
                             className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${loginType === "admin" ? "bg-white shadow-sm text-indigo-600" : "text-gray-500 hover:text-gray-700"}`}
                         >
                             Admin Portal
@@ -125,16 +126,11 @@ export default function LoginPage() {
                                 )}
                             </button>
                         </div>
-                        {error && (
-                            <div className="text-sm font-medium text-red-500 text-center bg-red-50 p-3 rounded-md">
-                                {error}
-                            </div>
-                        )}
                         <Button
                             type="submit"
                             className={`w-full h-12 text-lg font-medium transition-all ${loginType === "admin"
-                                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                                    : "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
+                                ? "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                                : "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
                                 }`}
                             disabled={isLoading}
                         >

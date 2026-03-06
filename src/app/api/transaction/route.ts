@@ -9,11 +9,13 @@ export async function POST(req: Request) {
 
         // DEV MODE BYPASS
         if (!session?.user) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             session = { user: { id: "dev-member-id", name: "Dev Worker", username: "worker1", role: "MEMBER" } } as any;
         }
 
         const body = await req.json();
-        let { jobId, jobTitle, memberId, totalAmount, customerName, customerPhone } = body;
+        const { jobTitle, totalAmount, customerName, customerPhone } = body;
+        let { memberId } = body;
 
         // Verify the member exists and fetch their name for the initials logic
         let member;
