@@ -12,10 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
+import { Plus, Eye, EyeOff } from "lucide-react";
 
 export function MemberDialog({ createMember }: { createMember: (formData: FormData) => void }) {
     const [open, setOpen] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [passwordError, setPasswordError] = useState("");
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -33,6 +36,13 @@ export function MemberDialog({ createMember }: { createMember: (formData: FormDa
                 </DialogHeader>
                 <form
                     action={(formData) => {
+                        setPasswordError("");
+                        const password = formData.get("password") as string;
+                        const confirmPassword = formData.get("confirmPassword") as string;
+                        if (password !== confirmPassword) {
+                            setPasswordError("Passwords do not match");
+                            return;
+                        }
                         createMember(formData);
                         setOpen(false);
                     }}
@@ -48,7 +58,22 @@ export function MemberDialog({ createMember }: { createMember: (formData: FormDa
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="password">Login Password</Label>
-                        <Input id="password" name="password" type="password" required />
+                        <div className="relative">
+                            <Input id="password" name="password" type={showPassword ? "text" : "password"} required />
+                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirm Password</Label>
+                        <div className="relative">
+                            <Input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} required />
+                            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+                        {passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
                     </div>
                     <div className="pt-4 flex justify-end">
                         <Button type="submit">Create Member</Button>

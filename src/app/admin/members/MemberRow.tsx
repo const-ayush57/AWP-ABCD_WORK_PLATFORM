@@ -2,18 +2,30 @@
 
 import { useState } from "react";
 import { TableRow, TableCell } from "@/components/ui/table";
-import { Eye, EyeOff, Trash2 } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
+import { AdminAuthDialog } from "./AdminAuthDialog";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function MemberRow({ member, deleteMember }: { member: any, deleteMember: (formData: FormData) => void }) {
+export function MemberRow({ member }: { member: any }) {
     const [showPassword, setShowPassword] = useState(false);
 
     return (
         <TableRow>
-            <TableCell className="font-medium text-blue-700">
-                <div className="flex items-center space-x-2">
-                    <div className={`h-2.5 w-2.5 rounded-full ${member.isOnline ? "bg-green-500" : "bg-red-500"}`} />
+            <TableCell className="font-medium">
+                <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs shrink-0">
+                        {member.name.charAt(0)}
+                    </div>
                     <span>{member.name}</span>
+                </div>
+            </TableCell>
+            <TableCell>
+                <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2.5 w-2.5">
+                        {member.isOnline && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${member.isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
+                    </span>
+                    <span className={`text-xs font-medium ${member.isOnline ? 'text-emerald-700' : 'text-gray-500'}`}>{member.isOnline ? 'Online' : 'Offline'}</span>
                 </div>
             </TableCell>
             <TableCell>{member.username}</TableCell>
@@ -34,12 +46,10 @@ export function MemberRow({ member, deleteMember }: { member: any, deleteMember:
             </TableCell>
             <TableCell>{member._count?.transactions || 0} jobs</TableCell>
             <TableCell className="text-right">
-                <form action={deleteMember}>
-                    <input type="hidden" name="id" value={member.id} />
-                    <button type="submit" className="text-red-500 hover:text-red-700 p-2 rounded-md hover:bg-red-50 transition-colors" title="Remove Member">
-                        <Trash2 size={18} />
-                    </button>
-                </form>
+                <div className="flex justify-end gap-2">
+                    <AdminAuthDialog actionType="reset" targetMemberId={member.id} memberName={member.name} />
+                    <AdminAuthDialog actionType="delete" targetMemberId={member.id} memberName={member.name} />
+                </div>
             </TableCell>
         </TableRow>
     );

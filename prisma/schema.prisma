@@ -28,6 +28,7 @@ model User {
   plainPassword String?       // To allow admin to view member passwords
   name          String
   role          Role          @default(MEMBER)
+  sessionToken  String?       // Tracks active session for single-device enforcement
   isOnline      Boolean?      @default(false)
   lastSeen      DateTime?     @default(now())
   transactions  Transaction[] // Tracks which member did which job

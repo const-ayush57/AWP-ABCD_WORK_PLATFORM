@@ -31,8 +31,8 @@ export default async function AdminDashboard() {
             take: 1,
         }),
         prisma.user.findMany({
-            where: { role: "MEMBER" },
-            select: { id: true, name: true, username: true, updatedAt: true },
+            where: { role: "MEMBER", isOnline: true },
+            select: { id: true, name: true, username: true, updatedAt: true, isOnline: true },
             orderBy: { updatedAt: "desc" },
             take: 5 // Only show top 5 for the dense dash table
         }),
@@ -157,10 +157,10 @@ export default async function AdminDashboard() {
                                         <TableCell>
                                             <div className="flex items-center gap-1.5">
                                                 <span className="relative flex h-2.5 w-2.5">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                                    {member.isOnline && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                                                    <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${member.isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
                                                 </span>
-                                                <span className="text-xs font-medium text-emerald-700">Online</span>
+                                                <span className={`text-xs font-medium ${member.isOnline ? 'text-emerald-700' : 'text-gray-500'}`}>{member.isOnline ? 'Online' : 'Offline'}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell className="font-mono text-xs text-gray-500">{member.username}</TableCell>

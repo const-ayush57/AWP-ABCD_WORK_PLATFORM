@@ -2,6 +2,7 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import prisma from "./prisma";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -24,10 +25,12 @@ export const authOptions: NextAuthOptions = {
 
                 if (!isPasswordValid) return null;
 
-                // Update isOnline status
+                const sessionToken = crypto.randomUUID();
+
+                // Update isOnline status and initialize active sessionToken
                 await prisma.user.update({
                     where: { id: user.id },
-                    data: { isOnline: true, lastSeen: new Date() }
+                    data: { isOnline: true, lastSeen: new Date(), sessionToken }
                 });
 
                 return {
@@ -35,6 +38,7 @@ export const authOptions: NextAuthOptions = {
                     username: user.username,
                     name: user.name,
                     role: user.role,
+                    sessionToken,
                 };
             },
         }),
@@ -47,6 +51,18 @@ export const authOptions: NextAuthOptions = {
                 token.role = (user as any).role;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 token.username = (user as any).username;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                token.sessionToken = (user as any).sessionToken;
+            } else if (token.id) {
+                // Secondary check: verify session token against DB to ensure this device hasn't been kicked
+                const dbUser = await prisma.user.findUnique({
+                    where: { id: token.id as string },
+                    select: { sessionToken: true }
+                });
+
+                if (!dbUser || dbUser.sessionToken !== token.sessionToken) {
+                    return {}; // Invalidates the JWT session forcefully
+                }
             }
             return token;
         },

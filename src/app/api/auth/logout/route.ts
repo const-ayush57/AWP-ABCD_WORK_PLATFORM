@@ -10,7 +10,7 @@ export async function POST() {
         if (session?.user?.id) {
             await prisma.user.update({
                 where: { id: session.user.id },
-                data: { isOnline: false, lastSeen: new Date() }
+                data: { isOnline: false, lastSeen: new Date(), sessionToken: null }
             });
         }
 

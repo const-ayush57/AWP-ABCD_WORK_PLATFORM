@@ -49,19 +49,7 @@ export default async function MembersPage() {
         }
     }
 
-    async function deleteMember(formData: FormData) {
-        "use server";
-        const id = formData.get("id") as string;
-        if (!id) return;
 
-        try {
-            await prisma.user.delete({ where: { id } });
-            revalidatePath("/admin/members");
-            revalidatePath("/admin");
-        } catch (e) {
-            console.error(e);
-        }
-    }
 
     return (
         <div className="space-y-6">
@@ -74,7 +62,8 @@ export default async function MembersPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Session & Name</TableHead>
+                            <TableHead>Operator</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead>Username (Login ID)</TableHead>
                             <TableHead>Password</TableHead>
                             <TableHead>Role</TableHead>
@@ -85,14 +74,14 @@ export default async function MembersPage() {
                     <TableBody>
                         {members.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                                     No active members found. Add one to get started!
                                 </TableCell>
                             </TableRow>
                         )}
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {members.map((member: any) => (
-                            <MemberRow key={member.id} member={member} deleteMember={deleteMember} />
+                            <MemberRow key={member.id} member={member} />
                         ))}
                     </TableBody>
                 </Table>
