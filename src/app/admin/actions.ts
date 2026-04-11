@@ -2,6 +2,9 @@
 
 import prisma from "@/lib/prisma";
 import { startOfDay, endOfDay, subDays, format } from "date-fns";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { hasPermission } from "@/lib/roles";
 
 export type AnalyticsFilters = {
     dateRange: string; // "today", "7days", "30days", "all"
@@ -11,6 +14,12 @@ export type AnalyticsFilters = {
 };
 
 export async function getAnalyticsData(filters: AnalyticsFilters) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id || !hasPermission(session.user.role, "ADMIN_PANEL")) {
+        throw new Error("Unauthorized");
+    }
+
+
     // 1. Build the Prisma Where Clause
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {};
@@ -28,8 +37,22 @@ export async function getAnalyticsData(filters: AnalyticsFilters) {
         where.memberId = filters.memberId;
     }
 
+    // Build title filters: paymentMethod and category both filter jobTitle,
+    // so collect them as AND conditions to avoid one overwriting the other.
+    const titleFilters: { contains: string }[] = [];
+
     if (filters.paymentMethod && filters.paymentMethod !== "all") {
-        where.jobTitle = { contains: `[${filters.paymentMethod}]` };
+        titleFilters.push({ contains: `[${filters.paymentMethod}]` });
+    }
+
+    if (filters.category && filters.category !== "all") {
+        titleFilters.push({ contains: filters.category });
+    }
+
+    if (titleFilters.length === 1) {
+        where.jobTitle = titleFilters[0];
+    } else if (titleFilters.length > 1) {
+        where.AND = titleFilters.map((f) => ({ jobTitle: f }));
     }
 
     // 2. Fetch Transactions & Members Map
@@ -38,6 +61,9 @@ export async function getAnalyticsData(filters: AnalyticsFilters) {
         include: { member: { select: { name: true } } },
         orderBy: { createdAt: "asc" },
     });
+
+    // Note: analytics viewing is not a security-sensitive action,
+    // so we do NOT write an audit log here (avoids polluting the audit viewer).
 
     // 3. Aggregate Data in Memory (Fast for <100k records, avoids Mongo Raw Maps)
 
@@ -48,16 +74,27 @@ export async function getAnalyticsData(filters: AnalyticsFilters) {
     const memberShareMap = new Map<string, number>();
 
     // C. Job Popularity (Horizontal Bar Chart)
-    const jobPopularityMap = new Map<string, number>();
+    const jobPopularityCountMap = new Map<string, number>();
+    const jobPopularityRevenueMap = new Map<string, number>();
 
     let totalRevenue = 0;
 
     for (const tx of transactions) {
         totalRevenue += tx.totalAmount;
 
-        // Date Bucket
-        const formatString = filters.dateRange === "today" ? "h aa" : "MMM dd";
-        const dateKey = format(tx.createdAt, formatString);
+        // Date Bucket - Grouping 'today' into 2-hour blocks to prevent X-axis crowding
+        let dateKey = "";
+        if (filters.dateRange === "today") {
+            // e.g. "9 AM", "11 AM", "1 PM"
+            const hour = tx.createdAt.getHours();
+            const bucketHour = Math.floor(hour / 2) * 2;
+            const ampm = bucketHour >= 12 ? 'PM' : 'AM';
+            const displayHour = bucketHour % 12 || 12;
+            dateKey = `${displayHour} ${ampm}`;
+        } else {
+            dateKey = format(tx.createdAt, "MMM dd");
+        }
+        
         revenueFlowMap.set(dateKey, (revenueFlowMap.get(dateKey) || 0) + tx.totalAmount);
 
         // Member Bucket
@@ -66,7 +103,8 @@ export async function getAnalyticsData(filters: AnalyticsFilters) {
 
         // Job Bucket (Clean title from strings like (x2) [CASH])
         const cleanTitle = tx.jobTitle.replace(/ \(x\d+\)/, "").replace(/ \[[A-Z]+\]/, "").trim();
-        jobPopularityMap.set(cleanTitle, (jobPopularityMap.get(cleanTitle) || 0) + 1);
+        jobPopularityCountMap.set(cleanTitle, (jobPopularityCountMap.get(cleanTitle) || 0) + 1);
+        jobPopularityRevenueMap.set(cleanTitle, (jobPopularityRevenueMap.get(cleanTitle) || 0) + tx.totalAmount);
     }
 
     // Format for Tremor Charts
@@ -80,11 +118,17 @@ export async function getAnalyticsData(filters: AnalyticsFilters) {
         revenue,
     }));
 
-    const jobPopularity = Array.from(jobPopularityMap.entries())
-        .map(([job, count]) => ({
-            job,
-            Count: count,
-        }))
+    const jobPopularity = Array.from(jobPopularityCountMap.entries())
+        .map(([job, count]) => {
+            const jobRev = jobPopularityRevenueMap.get(job) || 0;
+            const share = totalRevenue > 0 ? (jobRev / totalRevenue) * 100 : 0;
+            return {
+                job,
+                Count: count,
+                SharePercent: share.toFixed(1) + "%", // E.g., "45.2%"
+                Revenue: jobRev
+            };
+        })
         .sort((a, b) => b.Count - a.Count)
         .slice(0, 10); // Top 10
 

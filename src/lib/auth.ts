@@ -1,8 +1,12 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import prisma from "./prisma";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { ensureIdentityFiles, readNetworkHash } from "./identity";
+import { isPrivilegedAdminRole } from "./roles";
+import { verifyTotpToken } from "./totp";
+import { logAuditEvent } from "./audit";
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -11,6 +15,7 @@ export const authOptions: NextAuthOptions = {
             credentials: {
                 username: { label: "Username or PIN", type: "text" },
                 password: { label: "Password (or PIN again)", type: "password" },
+                totp: { label: "Authenticator Code", type: "text" },
             },
             async authorize(credentials) {
                 if (!credentials?.username || !credentials?.password) return null;
@@ -23,7 +28,46 @@ export const authOptions: NextAuthOptions = {
 
                 const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
 
-                if (!isPasswordValid) return null;
+                if (!isPasswordValid) {
+                    await logAuditEvent({
+                        action: "LOGIN_PASSWORD_FAILED",
+                        targetType: "USER",
+                        targetId: user.id,
+                        status: "FAILED",
+                        message: "Invalid password",
+                    });
+                    return null;
+                }
+
+                if (isPrivilegedAdminRole(user.role)) {
+                    ensureIdentityFiles();
+                    const localNetworkHash = readNetworkHash();
+                    const authority = await prisma.networkAuthority.findUnique({
+                        where: { id: "default" },
+                    });
+
+                    if (!authority) return null;
+                    if (authority.networkHash !== localNetworkHash) return null;
+
+                    const totpConfig = await prisma.adminTOTPConfig.findUnique({
+                        where: { userId: user.id },
+                    });
+
+                    if (totpConfig?.enabled) {
+                        const token = String(credentials.totp || "").trim();
+                        if (!token || !verifyTotpToken(totpConfig.secret, token)) {
+                            await logAuditEvent({
+                                actorUserId: user.id,
+                                action: "LOGIN_TOTP_FAILED",
+                                targetType: "USER",
+                                targetId: user.id,
+                                status: "FAILED",
+                                message: "Invalid or missing TOTP token",
+                            });
+                            return null;
+                        }
+                    }
+                }
 
                 const sessionToken = crypto.randomUUID();
 
@@ -31,6 +75,14 @@ export const authOptions: NextAuthOptions = {
                 await prisma.user.update({
                     where: { id: user.id },
                     data: { isOnline: true, lastSeen: new Date(), sessionToken }
+                });
+
+                await logAuditEvent({
+                    actorUserId: user.id,
+                    action: "LOGIN_SUCCESS",
+                    targetType: "USER",
+                    targetId: user.id,
+                    status: "SUCCESS",
                 });
 
                 return {
@@ -84,6 +136,10 @@ export const authOptions: NextAuthOptions = {
     session: {
         strategy: "jwt",
     },
-    secret: process.env.NEXTAUTH_SECRET || "default_secret_for_local_dev_only",
+    secret: (() => {
+        const secret = process.env.NEXTAUTH_SECRET;
+        if (!secret) throw new Error("NEXTAUTH_SECRET environment variable is required. Set it in your .env file.");
+        return secret;
+    })(),
     debug: process.env.NODE_ENV === "development",
 };

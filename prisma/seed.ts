@@ -1,25 +1,24 @@
 import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcrypt'
 
 const prisma = new PrismaClient()
 
+/**
+ * Seed script: Initialize database structures (NOT default users).
+ * 
+ * Production-Ready Bootstrap Flow:
+ * 1. On first app start, admin sees "Primary Admin Setup" page
+ * 2. Admin creates themselves via /api/system/bootstrap-admin
+ * 3. Admin logs in and configures network authority
+ * 4. Members are created by admin, authenticate against admin server
+ * 
+ * This seed script runs ONLY once during build; it does NOT create users.
+ * Intentionally left minimal to support self-service admin creation.
+ */
+
 async function main() {
-    const adminPassword = await bcrypt.hash('admin123', 10)
-
-    const admin = await prisma.user.upsert({
-        where: { username: 'admin' },
-        update: {},
-        create: {
-            username: 'admin',
-            name: 'System Admin',
-            password: adminPassword,
-            role: 'ADMIN'
-        },
-    })
-
-    console.log('Created admin user:', admin.username)
-
-
+    console.log('✓ Database seed initialized')
+    console.log('✓ On first app start, the admin will create themselves via secure bootstrap UI')
+    console.log('✓ No default credentials are seeded for production security')
 }
 
 main()

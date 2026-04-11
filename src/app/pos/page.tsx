@@ -18,6 +18,7 @@ export default async function POSPage() {
         <POSDashboard
             templates={templates}
             memberId={session?.user?.id || ""}
+            memberName={session?.user?.name || "Unknown Member"}
         />
     );
 }

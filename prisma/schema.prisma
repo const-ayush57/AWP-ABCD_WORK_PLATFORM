@@ -6,38 +6,133 @@ generator client {
 }
 
 datasource db {
-  provider = "mongodb"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  MEMBER
-}
-
-enum OrderStatus {
-  PENDING
-  PAID
-  CANCELLED
-}
-
 model User {
-  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  id            String        @id @default(uuid())
   username      String        @unique
-  password      String        // Hashed
-  plainPassword String?       // To allow admin to view member passwords
+  email         String?       @unique
+  password      String        // Hashed (bcrypt)
   name          String
-  role          Role          @default(MEMBER)
+  role          String        @default("MEMBER") // ADMIN | MANAGER | CLERK | MEMBER
   sessionToken  String?       // Tracks active session for single-device enforcement
-  isOnline      Boolean?      @default(false)
+  isOnline      Boolean       @default(false)
   lastSeen      DateTime?     @default(now())
   transactions  Transaction[] // Tracks which member did which job
+  createdRequests AdminCreationRequest[] @relation("RequestedBy")
+  approvedRequests AdminCreationRequest[] @relation("ApprovedBy")
+  networkAuthority NetworkAuthority? @relation("AdminAuthority")
+  recoveryTokens AdminRecoveryToken[]
+  totpConfig    AdminTOTPConfig?
+  masterKeyHash String?       // Hashed master recovery key
+  auditEvents   AuditLog[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
 
+model AdminRecoveryToken {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash      String
+  expiresAt    DateTime
+  attempts     Int      @default(0)
+  consumedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+model NetworkAuthority {
+  id                 String   @id @default("default")
+  networkHash        String   @unique
+  primaryAdminUserId String?  @unique
+  adminUser          User?    @relation("AdminAuthority", fields: [primaryAdminUserId], references: [id], onDelete: SetNull)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model ServerConfig {
+  id              String   @id @default("default")
+  // Admin server details for LAN-based members to connect
+  serverHost      String   @default("localhost")      // IP address or hostname (e.g., "192.168.1.100" or "admin-pc")
+  serverPort      Int      @default(3000)             // Port number
+  // Security: public key for member verification
+  serverPublicKey String?                             // Public key for identifying this server uniquely
+  // Status
+  isEnabled       Boolean  @default(true)
+  lastConfiguredBy String? 
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AdminTOTPConfig {
+  id          String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret       String
+  issuer       String   @default("ABCD Work Platform")
+  label        String
+  enabled      Boolean  @default(false)
+  verifiedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  action      String
+  targetType  String
+  targetId    String?
+  status      String   @default("SUCCESS")
+  message     String?
+  ipAddress   String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model AdminCreationRequest {
+  id              String   @id @default(uuid())
+  newAdminUsername String
+  newAdminName    String
+  newAdminPassword String // Hashed
+  
+  // Verification
+  verificationCode String  // 6-digit code
+  verificationType String  @default("PIN") // PIN | EMAIL | SMS
+  isVerified      Boolean  @default(false)
+  verifiedAt      DateTime?
+  
+  // Status
+  status          String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  rejectionReason String?
+  
+  // Audit trail
+  requestedBy     User     @relation("RequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  requestedById   String
+  approvedBy      User?    @relation("ApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedById    String?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  expiresAt       DateTime // Request expires in 24 hours
+  
+  @@index([status])
+  @@index([requestedById])
+  @@unique([newAdminUsername])
+}
+
 model JobTemplate {
-  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  id          String      @id @default(uuid())
   title       String      // e.g., "Xerox/Printing"
   basePrice   Float       @default(0.0)
   category    String?     // e.g., "Stationary", "Digital"
@@ -47,32 +142,40 @@ model JobTemplate {
 }
 
 model JobOption {
-  id            String      @id @default(auto()) @map("_id") @db.ObjectId
-  name          String      // e.g., "Full Color"
-  additionalCost Float      @default(0.0)
-  jobTemplate   JobTemplate @relation(fields: [jobTemplateId], references: [id], onDelete: Cascade)
-  jobTemplateId String      @db.ObjectId
+  id             String      @id @default(uuid())
+  name           String      // e.g., "Full Color"
+  additionalCost Float       @default(0.0)
+  jobTemplate    JobTemplate @relation(fields: [jobTemplateId], references: [id], onDelete: Cascade)
+  jobTemplateId  String
 }
 
 model Transaction {
-  id              String      @id @default(auto()) @map("_id") @db.ObjectId
-  transactionRef  String      @unique // We will generate a custom readable ID like "JOB-12345"
+  id              String   @id @default(uuid())
+  transactionRef  String   @unique // Custom ID e.g. "RAHU143052110426001" (name+time+date+order)
   customerName    String?
   customerPhone   String?
-  
+
   // The specific job performed
-  jobTitle        String      // Snapshot of title at time of purchase
+  jobTitle        String   // Snapshot of title at time of purchase
   totalAmount     Float
-  status          OrderStatus @default(PAID)
+  status          String   @default("PAID") // PENDING | PAID | CANCELLED
 
   // Relations
-  member          User        @relation(fields: [memberId], references: [id])
-  memberId        String      @db.ObjectId
-  
+  member          User     @relation(fields: [memberId], references: [id])
+  memberId        String
+
   // Metadata
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([memberId])
   @@index([createdAt])
+}
+
+// Atomic daily order counter — one row per calendar day (DDMMYY key).
+// Incremented inside a Prisma transaction so concurrent billing never
+// produces the same order number.
+model DailyCounter {
+  dateKey   String @id // e.g. "110426" (DDMMYY)
+  counter   Int    @default(0)
 }

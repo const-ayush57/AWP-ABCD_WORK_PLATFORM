@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CyberTrack POS",
+  title: "ABCD WORK PLATFORM",
   description: "Next-gen zero-fee POS system",
 };
 

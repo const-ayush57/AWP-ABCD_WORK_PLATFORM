@@ -9,6 +9,10 @@ export function SignOutButton() {
 
     const handleSignOut = async () => {
         try {
+            // Clear any persisted POS cart data
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith("pos_cart_")) localStorage.removeItem(key);
+            });
             await fetch('/api/auth/logout', { method: 'POST' });
         } catch (e) {
             console.error(e);

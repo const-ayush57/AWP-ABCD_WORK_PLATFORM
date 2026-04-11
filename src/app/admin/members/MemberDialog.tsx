@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -13,8 +13,93 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 
-export function MemberDialog({ createMember }: { createMember: (formData: FormData) => void }) {
+type CreateMemberResult = {
+    success?: boolean;
+    error?: string;
+};
+
+// Isolated password fields with debounced mismatch detection
+function PasswordFields({
+    showPassword, setShowPassword,
+    showConfirmPassword, setShowConfirmPassword,
+    passwordError, setPasswordError,
+}: {
+    showPassword: boolean;
+    setShowPassword: (v: boolean) => void;
+    showConfirmPassword: boolean;
+    setShowConfirmPassword: (v: boolean) => void;
+    passwordError: string;
+    setPasswordError: (v: string) => void;
+}) {
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        // Clear error immediately when passwords match
+        if (password && confirmPassword && password === confirmPassword) {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+            setPasswordError("");
+            return;
+        }
+
+        // Only show error after user stops typing for 600ms
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            if (confirmPassword && password !== confirmPassword) {
+                setPasswordError("Passwords do not match");
+            } else {
+                setPasswordError("");
+            }
+        }, 600);
+
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+        };
+    }, [password, confirmPassword, setPasswordError]);
+
+    return (
+        <>
+            <div className="space-y-2">
+                <Label htmlFor="password">Login Password</Label>
+                <div className="relative">
+                    <Input
+                        id="password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                </div>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <div className="relative">
+                    <Input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                    />
+                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                </div>
+                {passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
+            </div>
+        </>
+    );
+}
+
+export function MemberDialog({ createMember }: { createMember: (formData: FormData) => Promise<CreateMemberResult> }) {
     const [open, setOpen] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -35,15 +120,15 @@ export function MemberDialog({ createMember }: { createMember: (formData: FormDa
                     </DialogDescription>
                 </DialogHeader>
                 <form
-                    action={(formData) => {
-                        setPasswordError("");
-                        const password = formData.get("password") as string;
-                        const confirmPassword = formData.get("confirmPassword") as string;
-                        if (password !== confirmPassword) {
-                            setPasswordError("Passwords do not match");
+                    action={async (formData) => {
+                        if (passwordError) return;
+                        const result = await createMember(formData);
+                        if (result?.error) {
+                            toast.error(result.error);
                             return;
                         }
-                        createMember(formData);
+
+                        toast.success("Member created successfully.");
                         setOpen(false);
                     }}
                     className="space-y-4 pt-4"
@@ -56,25 +141,14 @@ export function MemberDialog({ createMember }: { createMember: (formData: FormDa
                         <Label htmlFor="username">Login Username</Label>
                         <Input id="username" name="username" placeholder="johndoe123" required />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="password">Login Password</Label>
-                        <div className="relative">
-                            <Input id="password" name="password" type={showPassword ? "text" : "password"} required />
-                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
-                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="confirmPassword">Confirm Password</Label>
-                        <div className="relative">
-                            <Input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} required />
-                            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
-                                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-                        {passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
-                    </div>
+                        <PasswordFields
+                        showPassword={showPassword}
+                        setShowPassword={setShowPassword}
+                        showConfirmPassword={showConfirmPassword}
+                        setShowConfirmPassword={setShowConfirmPassword}
+                        passwordError={passwordError}
+                        setPasswordError={setPasswordError}
+                    />
                     <div className="pt-4 flex justify-end">
                         <Button type="submit">Create Member</Button>
                     </div>

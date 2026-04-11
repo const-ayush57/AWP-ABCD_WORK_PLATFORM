@@ -1,16 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { JobTemplate, JobOption } from "@prisma/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { MonitorSmartphone, Printer, Receipt, CheckCircle2, User, Phone, IndianRupee, Trash2 } from "lucide-react";
+import { 
+    Plus, 
+    Minus, 
+    Trash2, 
+    ShoppingCart, 
+    CheckCircle2, 
+    CreditCard, 
+    Banknote, 
+    Phone,
+    Printer,
+    MonitorSmartphone,
+    User,
+    Receipt,
+    IndianRupee
+} from "lucide-react";
 
 interface POSDashboardProps {
     templates: (JobTemplate & { options: JobOption[] })[];
     memberId: string;
+    memberName: string;
 }
 
 interface CartItem {
@@ -34,20 +49,61 @@ const itemVariants = {
     show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } }
 };
 
-export default function POSDashboard({ templates, memberId }: POSDashboardProps) {
+export default function POSDashboard({ templates, memberId, memberName }: POSDashboardProps) {
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
+    const [isMounted, setIsMounted] = useState(false);
     const [customerName, setCustomerName] = useState("");
     const [customerPhone, setCustomerPhone] = useState("");
     const [paymentMethod, setPaymentMethod] = useState<"UPI" | "CASH">("UPI");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [completedOrder, setCompletedOrder] = useState<any>(null);
+
+    // Load cart from local storage on mount, discarding any items whose
+    // job template no longer exists (template was deleted/deactivated remotely).
+    useEffect(() => {
+        setIsMounted(true);
+        const savedCart = localStorage.getItem(`pos_cart_${memberId}`);
+        if (savedCart) {
+            try {
+                const parsed: CartItem[] = JSON.parse(savedCart);
+                const validTemplateIds = new Set(templates.map((t) => t.id));
+                const filtered = parsed.filter((item) => validTemplateIds.has(item.job.id));
+                setCartItems(filtered);
+            } catch (e) {
+                console.error("Failed to parse cart from local storage", e);
+                localStorage.removeItem(`pos_cart_${memberId}`);
+            }
+        }
+    }, [memberId, templates]);
+
+    // Save cart to local storage whenever it changes
+    useEffect(() => {
+        if (isMounted) {
+            localStorage.setItem(`pos_cart_${memberId}`, JSON.stringify(cartItems));
+        }
+    }, [cartItems, isMounted, memberId]);
 
     const handleAddJob = (job: JobTemplate & { options: JobOption[] }) => {
-        const newItem: CartItem = {
-            id: Math.random().toString(36).substring(2, 9),
-            job,
-            options: {},
-            quantity: 1
-        };
-        setCartItems(prev => [...prev, newItem]);
+        setCartItems(prev => {
+            const existingItemIndex = prev.findIndex(item => item.job.id === job.id);
+            if (existingItemIndex >= 0) {
+                // Item already in cart, just increment quantity
+                const updatedItems = [...prev];
+                updatedItems[existingItemIndex] = {
+                    ...updatedItems[existingItemIndex],
+                    quantity: updatedItems[existingItemIndex].quantity + 1
+                };
+                return updatedItems;
+            }
+            // Item not in cart, add new entry
+            const newItem: CartItem = {
+                id: Math.random().toString(36).substring(2, 9),
+                job,
+                options: {},
+                quantity: 1
+            };
+            return [...prev, newItem];
+        });
     };
 
     const handleToggleOption = (itemId: string, optionId: string) => {
@@ -68,21 +124,39 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
         }));
     };
 
+    const handleExactQuantityChange = (itemId: string, value: string) => {
+        if (value === "") {
+            setCartItems(prev => prev.map(item => item.id === itemId ? { ...item, quantity: 0 } : item));
+            return;
+        }
+        
+        // Block if more than 3 digits
+        if (value.length > 3) return;
+
+        const parsed = parseInt(value, 10);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 999) {
+            setCartItems(prev => prev.map(item => item.id === itemId ? { ...item, quantity: parsed } : item));
+        }
+    };
+
+    const handleQuantityBlur = (itemId: string) => {
+        setCartItems(prev => prev.map(item => item.id === itemId ? { ...item, quantity: Math.max(1, item.quantity) } : item));
+    };
+
     const handleRemoveItem = (itemId: string) => {
         setCartItems(prev => prev.filter(item => item.id !== itemId));
     };
 
-    const calculateTotal = () => {
+    // Memoized so it only recalculates when cart or payment method changes (O3)
+    const totalAmount = useMemo(() => {
         return cartItems.reduce((acc, item) => {
             let itemTotal = item.job.basePrice;
             item.job.options.forEach((opt: JobOption) => {
-                if (item.options[opt.id]) {
-                    itemTotal += opt.additionalCost;
-                }
+                if (item.options[opt.id]) itemTotal += opt.additionalCost;
             });
-            return acc + (itemTotal * item.quantity);
+            return acc + itemTotal * item.quantity;
         }, 0);
-    };
+    }, [cartItems]);
 
     const generateJobTitleText = () => {
         const itemsText = cartItems.map(item => {
@@ -90,16 +164,18 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
             const optString = opts.length > 0 ? ` (${opts.join(", ")})` : "";
             return `${item.quantity}x ${item.job.title}${optString}`;
         }).join(" + ");
-
         return `${itemsText} [${paymentMethod}]`;
     };
-
-    const totalAmount = calculateTotal();
     const adminUpi = process.env.NEXT_PUBLIC_ADMIN_UPI || "8447436163@ybl";
-    const upiString = `upi://pay?pa=${adminUpi}&am=${totalAmount}&pn=CyberTrack&cu=INR`;
+    const upiString = `upi://pay?pa=${adminUpi}&am=${totalAmount}&pn=ABCD%20WORK%20PLATFORM&cu=INR`;
 
     async function handleCompleteTransaction() {
-        if (cartItems.length === 0 || totalAmount === 0) return;
+        // Filter out any items with zero quantity
+        const validItems = cartItems.filter(item => item.quantity > 0);
+        if (validItems.length === 0 || totalAmount === 0) return;
+
+        // Validate phone if provided
+        if (customerPhone && customerPhone.length !== 10) return;
 
         const loadingToast = toast.loading("Processing transaction...");
 
@@ -107,9 +183,9 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
             const res = await fetch("/api/transaction", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                // memberId is NOT sent — server reads it from the authenticated session (security)
                 body: JSON.stringify({
                     jobTitle: generateJobTitleText(),
-                    memberId,
                     totalAmount,
                     customerName,
                     customerPhone,
@@ -117,13 +193,27 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
             });
 
             if (res.ok) {
+                const data = await res.json();
+                
+                // Store order details for receipt
+                setCompletedOrder({
+                    transaction: data.transaction,
+                    items: [...cartItems],
+                    paymentMethod,
+                    customerName,
+                    customerPhone,
+                    date: new Date().toISOString()
+                });
+
+                // Clear form
                 setCartItems([]);
                 setCustomerName("");
                 setCustomerPhone("");
                 setPaymentMethod("UPI");
+                
                 toast.success("Transaction Complete", {
                     id: loadingToast,
-                    description: `Multiple items for ₹${totalAmount.toFixed(2)} recorded.`,
+                    description: `Order ${data.transaction.transactionRef} recorded successfully.`,
                     icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 });
             } else {
@@ -139,14 +229,15 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
     }
 
     return (
-        <div className="min-h-screen bg-[#050505] text-gray-100 font-sans tracking-tight selection:bg-blue-500/30">
-            {/* Ambient Background Glow */}
+        <>
+            <div className="min-h-screen bg-[#050505] text-gray-100 font-sans tracking-tight selection:bg-blue-500/30 print:hidden">
+                {/* Ambient Background Glow */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
                 <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-900/10 blur-[120px]" />
                 <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-900/10 blur-[120px]" />
             </div>
 
-            <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className="relative z-10 w-full mx-auto p-3 md:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 items-start">
 
                 {/* Left Panel: Bento Grid Job Selection */}
                 <div className="lg:col-span-8 space-y-6">
@@ -159,7 +250,7 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
                     </div>
 
                     <motion.div
-                        className="grid grid-cols-2 md:grid-cols-3 gap-4"
+                        className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4"
                         variants={containerVariants}
                         initial="hidden"
                         animate="show"
@@ -170,7 +261,7 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
                                 <motion.div key={job.id} variants={itemVariants} whileTap={{ scale: 0.96 }}>
                                     <div
                                         onClick={() => handleAddJob(job)}
-                                        className={`relative group cursor-pointer overflow-hidden rounded-2xl border transition-all duration-300 h-full
+                                        className={`relative group cursor-pointer overflow-hidden rounded-2xl border transition-all duration-300 h-full select-none
                                             ${isSelected
                                                 ? 'bg-blue-600/10 border-blue-500 shadow-[0_0_30px_-5px_rgba(59,130,246,0.3)] backdrop-blur-md'
                                                 : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 backdrop-blur-sm'
@@ -236,7 +327,8 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
                                                 layout
                                                 initial={{ opacity: 0, scale: 0.95 }}
                                                 animate={{ opacity: 1, scale: 1 }}
-                                                exit={{ opacity: 0, scale: 0.95 }}
+                                                exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+                                                transition={{ duration: 0.2 }}
                                                 className="bg-black/30 rounded-xl p-4 border border-white/5 space-y-3"
                                             >
                                                 {/* Header & Removal */}
@@ -248,7 +340,7 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
                                                     <motion.button
                                                         whileTap={{ scale: 0.8 }}
                                                         onClick={() => handleRemoveItem(item.id)}
-                                                        className="text-gray-500 hover:text-red-400 transition-colors p-1"
+                                                        className="text-gray-500 hover:text-red-400 transition-colors p-1 select-none"
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </motion.button>
@@ -267,7 +359,7 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
                                                                 />
                                                                 <label
                                                                     htmlFor={`${item.id}-${opt.id}`}
-                                                                    className="text-xs font-medium text-gray-300 group-hover:text-white transition-colors cursor-pointer flex-1"
+                                                                    className="text-xs font-medium text-gray-300 group-hover:text-white transition-colors cursor-pointer flex-1 select-none"
                                                                 >
                                                                     {opt.name}
                                                                 </label>
@@ -283,15 +375,24 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
                                                     <div className="flex items-center space-x-2 bg-black/60 rounded-md p-0.5 border border-white/5">
                                                         <motion.button
                                                             whileTap={{ scale: 0.9 }}
-                                                            className="h-6 w-6 rounded flex items-center justify-center text-gray-300 hover:bg-white/10 transition-colors bg-white/5"
+                                                            className="h-6 w-6 rounded flex items-center justify-center text-gray-300 hover:bg-white/10 transition-colors bg-white/5 select-none"
                                                             onClick={() => handleUpdateQuantity(item.id, -1)}
                                                         >
                                                             -
                                                         </motion.button>
-                                                        <span className="font-mono text-sm font-medium w-6 text-center text-white">{item.quantity}</span>
+                                                        <input
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            pattern="[0-9]*"
+                                                            maxLength={3}
+                                                            className="font-mono text-sm font-medium w-8 text-center text-white bg-transparent outline-none focus:bg-white/10 rounded transition-colors cursor-text"
+                                                            value={item.quantity === 0 ? "" : item.quantity}
+                                                            onChange={(e) => handleExactQuantityChange(item.id, e.target.value)}
+                                                            onBlur={() => handleQuantityBlur(item.id)}
+                                                        />
                                                         <motion.button
                                                             whileTap={{ scale: 0.9 }}
-                                                            className="h-6 w-6 rounded flex items-center justify-center text-gray-300 hover:bg-white/10 transition-colors bg-white/5"
+                                                            className="h-6 w-6 rounded flex items-center justify-center text-gray-300 hover:bg-white/10 transition-colors bg-white/5 select-none"
                                                             onClick={() => handleUpdateQuantity(item.id, 1)}
                                                         >
                                                             +
@@ -310,14 +411,14 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
                                         <div className="flex p-1 bg-black/50 backdrop-blur-sm rounded-xl border border-white/10 relative">
                                             <motion.button
                                                 whileTap={{ scale: 0.98 }}
-                                                className={`flex-1 py-1.5 text-xs uppercase tracking-widest font-bold rounded-lg z-10 transition-colors ${paymentMethod === "UPI" ? "text-white" : "text-gray-400 hover:text-gray-200"}`}
+                                                className={`flex-1 py-1.5 text-xs uppercase tracking-widest font-bold rounded-lg z-10 transition-colors select-none ${paymentMethod === "UPI" ? "text-white" : "text-gray-400 hover:text-gray-200"}`}
                                                 onClick={() => setPaymentMethod("UPI")}
                                             >
                                                 UPI / QR
                                             </motion.button>
                                             <motion.button
                                                 whileTap={{ scale: 0.98 }}
-                                                className={`flex-1 py-1.5 text-xs uppercase tracking-widest font-bold rounded-lg z-10 transition-colors ${paymentMethod === "CASH" ? "text-white" : "text-gray-400 hover:text-gray-200"}`}
+                                                className={`flex-1 py-1.5 text-xs uppercase tracking-widest font-bold rounded-lg z-10 transition-colors select-none ${paymentMethod === "CASH" ? "text-white" : "text-gray-400 hover:text-gray-200"}`}
                                                 onClick={() => setPaymentMethod("CASH")}
                                             >
                                                 CASH
@@ -347,10 +448,15 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
                                             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500" />
                                             <input
                                                 type="text"
+                                                inputMode="numeric"
+                                                maxLength={10}
                                                 className="w-full bg-black/40 border border-white/10 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-lg py-2 pl-9 pr-3 text-xs text-white placeholder-gray-600 transition-all outline-none"
                                                 value={customerPhone}
-                                                onChange={(e) => setCustomerPhone(e.target.value)}
-                                                placeholder="Phone Number (Opt)"
+                                                onChange={(e) => {
+                                                    const val = e.target.value.replace(/\D/g, "");
+                                                    setCustomerPhone(val);
+                                                }}
+                                                placeholder="Phone Number (10 digits)"
                                             />
                                         </div>
                                     </div>
@@ -395,9 +501,9 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
 
                                 <motion.button
                                     whileTap={{ scale: 0.98 }}
-                                    className="w-full h-12 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full h-12 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed select-none"
                                     onClick={handleCompleteTransaction}
-                                    disabled={totalAmount === 0}
+                                    disabled={totalAmount === 0 || (customerPhone.length > 0 && customerPhone.length !== 10)}
                                 >
                                     <CheckCircle2 className="h-4 w-4" />
                                     Complete Checkout
@@ -408,5 +514,132 @@ export default function POSDashboard({ templates, memberId }: POSDashboardProps)
                 </div>
             </div>
         </div>
+
+        <AnimatePresence>
+                {completedOrder && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm print:bg-white print:p-0 print:items-start"
+                    >
+                        <motion.div
+                            id="printable-receipt"
+                            initial={{ scale: 0.95, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95, y: 20 }}
+                            className="bg-white text-black w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] print:max-w-full print:max-h-none print:shadow-none print:overflow-visible my-print-receipt"
+                        >
+                            {/* Receipt Header */}
+                            <div className="bg-gray-100 p-6 text-center border-b border-gray-200 border-dashed relative">
+                                <div className="absolute -bottom-3 left-0 right-0 flex justify-between px-2">
+                                    <div className="h-6 w-6 rounded-full bg-black/80 shadow-inner" />
+                                    <div className="h-6 w-6 rounded-full bg-black/80 shadow-inner" />
+                                </div>
+                                <h3 className="text-2xl font-black tracking-tighter text-gray-900">ABCD WORK PLATFORM</h3>
+                                <p className="text-xs text-gray-500 mt-1 uppercase tracking-widest font-semibold">Official Receipt</p>
+                                
+                                <div className="mt-4 inline-flex items-center justify-center gap-2 bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    Payment Successful
+                                </div>
+                            </div>
+
+                            {/* Receipt Body (Scrollable) */}
+                            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                                
+                                {/* Meta Grid */}
+                                <div className="grid grid-cols-2 gap-4 text-sm border-b border-gray-100 pb-4">
+                                    <div>
+                                        <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Order Number</p>
+                                        <p className="font-mono font-bold text-gray-900">{completedOrder.transaction.transactionRef}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Date & Time</p>
+                                        <p className="font-medium text-gray-900">
+                                            {new Date(completedOrder.date).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Service Provider</p>
+                                        <p className="font-medium text-gray-900">{memberName}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Payment Method</p>
+                                        <p className="font-bold text-gray-900">{completedOrder.paymentMethod}</p>
+                                    </div>
+                                    {completedOrder.customerName && (
+                                        <div className="col-span-2 pt-2 border-t border-gray-50">
+                                            <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Customer Details</p>
+                                            <p className="font-medium text-gray-900">{completedOrder.customerName} {completedOrder.customerPhone ? `(${completedOrder.customerPhone})` : ''}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Items List */}
+                                <div>
+                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-3">Item Details</p>
+                                    <div className="space-y-3">
+                                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                        {completedOrder.items.map((item: any, idx: number) => {
+                                            // Calculate per-item price including options
+                                            let perItemCost = item.job.basePrice;
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                            const activeOpts = item.job.options.filter((o: any) => item.options[o.id]);
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                            activeOpts.forEach((o: any) => perItemCost += o.additionalCost);
+                                            const lineTotal = perItemCost * item.quantity;
+                                            
+                                            return (
+                                                <div key={idx} className="flex justify-between items-start text-sm">
+                                                    <div className="flex-1 pr-4">
+                                                        <p className="font-bold text-gray-900">{item.quantity}x {item.job.title}</p>
+                                                        {activeOpts.length > 0 && (
+                                                            <p className="text-xs text-gray-500 mt-0.5">
+                                                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                                                Includes: {activeOpts.map((o: any) => o.name).join(", ")}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <div className="font-mono font-medium text-gray-900 shrink-0">
+                                                        ₹{lineTotal.toFixed(2)}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Totals calculation isn't strictly necessary since it already matches the receipt total, but good UX */}
+                                <div className="border-t-2 border-dashed border-gray-200 pt-4 flex justify-between items-center">
+                                    <p className="text-base font-bold text-gray-900 uppercase tracking-wider">Total Paid</p>
+                                    <p className="text-2xl font-black text-blue-600 font-mono tracking-tighter">₹{completedOrder.transaction.totalAmount.toFixed(2)}</p>
+                                </div>
+
+                                {/* Optional Footer message */}
+                                <p className="text-center text-xs text-gray-400 italic">Thank you for assigning jobs with us.</p>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="p-4 bg-gray-50 border-t border-gray-200 flex gap-3 print:hidden">
+                                <button
+                                    onClick={() => window.print()}
+                                    className="flex-1 py-3 px-4 bg-white border border-gray-300 rounded-xl text-gray-700 font-bold hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 shadow-sm text-sm select-none"
+                                >
+                                    <Printer className="h-4 w-4" />
+                                    Print
+                                </button>
+                                <button
+                                    onClick={() => setCompletedOrder(null)}
+                                    className="flex-[2] py-3 px-4 bg-gray-900 hover:bg-black rounded-xl text-white font-bold transition-colors shadow-lg text-sm select-none"
+                                >
+                                    New Order
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </>
     );
 }

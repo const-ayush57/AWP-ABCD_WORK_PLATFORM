@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* @source "../../node_modules/@tremor/react"; */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -123,4 +124,98 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Global Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@media print {
+  /* Print Isolation Logic */
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 80mm !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body * {
+    visibility: hidden;
+    overflow: visible !important;
+  }
+
+  /* Show only the receipt */
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible !important;
+  }
+
+  #printable-receipt {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 80mm !important;
+    margin: 0 !important;
+    padding: 4mm !important;
+    background: white !important;
+    color: black !important;
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  #printable-receipt td,
+  #printable-receipt th,
+  #printable-receipt p,
+  #printable-receipt span,
+  #printable-receipt h1,
+  #printable-receipt h2,
+  #printable-receipt h3,
+  #printable-receipt div {
+    color: black !important;
+    background: transparent !important;
+  }
+
+  #printable-receipt .border-dashed {
+    border-color: black !important;
+    border-style: dashed !important;
+  }
+
+  #printable-receipt button {
+    display: none !important;
+  }
+
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  ::-webkit-scrollbar { display: none !important; }
 }

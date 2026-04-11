@@ -12,6 +12,18 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated/package artifacts:
+    ".next-release/**",
+    ".next-prod/**",
+    ".next-run/**",
+    "dist/**",
+    "dist-release/**",
+    "dist-v*/**",
+    "FINAL_APP_RELEASE/**",
+    "cpp-desktop/build/**",
+    "electron/**",
+    "scripts/**",
+    "test-cpp-db.js",
   ]),
 ]);
 
