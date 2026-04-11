@@ -1,163 +1,162 @@
-# ABCD Work Platform
+# ABCD Work Platform (AWP)
 
-ABCD Work Platform is a desktop-first POS and workforce management application built with Next.js + Electron. It is designed for local-network usage and role-separated operation (ADMIN and MEMBER).
+A desktop-first POS and workforce management application built with **Next.js + Electron**, designed for local-network (LAN) usage with strict role separation between Admin and Member accounts.
+
+---
 
 ## Core Stack
 
-- Frontend and backend: Next.js App Router (server components + route handlers)
-- Desktop shell: Electron
-- Auth: NextAuth credentials provider
-- Database: SQLite via Prisma
-- Styling/UI: Tailwind CSS + shadcn/ui + Tremor
+| Layer | Technology |
+|---|---|
+| Frontend & Backend | Next.js 16 App Router (Server Components + Route Handlers) |
+| Desktop Shell | Electron |
+| Authentication | NextAuth.js — Credentials provider + JWT sessions |
+| Database | SQLite via Prisma ORM |
+| Styling / UI | Tailwind CSS + shadcn/ui + Tremor |
+| Animations | Framer Motion |
 
-## Functional Overview
+---
 
-- Login-based role access
-- Admin dashboard for jobs, members, and analytics
-- POS dashboard for member operations
-- Transaction recording and reporting
-- UPI QR flow support via environment configuration
+## Features
 
-## Important Project Paths
+- **Admin Dashboard** — member management, job template CRUD, analytics (revenue, member share, job popularity)
+- **POS Terminal** — bento-grid job selection, cart with quantity control, UPI QR / Cash payment, itemized print receipts
+- **Structured Transaction IDs** — `NAME4 + HHMMSS + DDMMYY + ORDER` with atomic daily order counter
+- **Single-Session Enforcement** — one login per account across the LAN
+- **Network Hash Binding** — admin login locked to the registered machine
+- **TOTP 2FA** — optional authenticator app for admin accounts
+- **Audit Log Viewer** — all admin actions, logins, and member events (on-demand in Settings)
+- **Secure Admin Actions** — password reset / member delete require admin password re-authentication
+- **LAN Discovery** — members connect from any device on the same network
 
-- App routes: src/app
-- API routes: src/app/api
-- Auth config: src/lib/auth.ts
-- Access middleware: src/middleware.ts
-- Prisma schema and seed: prisma/schema.prisma, prisma/seed.ts
-- Electron process: electron/main.js
-- Build preparation scripts: scripts/download-node.js, scripts/prepare-electron.js
-- Packaging config: electron-builder.yml
+---
 
-## Environment Configuration
+## Quick Start
 
-Use .env for local development and .env.production for packaged app defaults.
-
-Required variables:
-
-```env
-DATABASE_URL="file:./prisma/awp.db"
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="replace_with_secure_secret"
-NEXT_PUBLIC_ADMIN_UPI="your-upi-id@bank"
-```
-
-## Database Notes
-
-- Prisma datasource is SQLite (not MongoDB).
-- Database file used by the app is awp.db.
-- Build pipeline now creates/syncs schema and seeds before packaging.
-
-Seeded default admin user:
-
-- Username: admin
-- Password: admin123
-
-Change this password immediately in production deployments.
-
-## Development Setup
-
-1. Install dependencies:
+### 1. Clone and install
 
 ```bash
+git clone https://github.com/const-ayush57/AWP-ABCD_WORK_PLATFORM.git
+cd AWP-ABCD_WORK_PLATFORM
 npm install
 ```
 
-2. Generate Prisma client and sync DB:
+### 2. Configure environment
+
+Copy `.env.example` to `.env` and fill in your values:
 
 ```bash
-npm run prisma:generate
-npm run prisma:push
+copy .env.example .env
 ```
 
-3. Seed initial data:
+Generate a secure `NEXTAUTH_SECRET`:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+### 3. Set up the database
 
 ```bash
-npm run prisma:seed
+npx prisma db push
+npx prisma db seed
 ```
 
-4. Run app in development mode:
+> **First-run setup**: On first launch, navigate to `http://localhost:3000` — the app will guide you through bootstrapping the first admin account via a secure setup wizard. No default credentials are hardcoded.
+
+### 4. Run in development mode
 
 ```bash
-npm run electron:dev
+npm run dev
 ```
 
-## Production Build and Installer
+App will be available at `http://localhost:3000` (and on your LAN at `http://<your-ip>:3000`).
 
-The packaging flow is designed so end users only install and launch the app.
+---
 
-Build Windows installer:
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── admin/          # Admin dashboard pages and actions
+│   │   ├── jobs/       # Job template management
+│   │   ├── members/    # Member CRUD
+│   │   ├── settings/   # LAN config + audit log viewer
+│   │   └── admins/     # Admin user management
+│   ├── pos/            # POS terminal (member billing)
+│   ├── api/
+│   │   ├── transaction/        # Billing endpoint
+│   │   ├── member/discover/    # LAN server discovery
+│   │   └── system/             # Auth, bootstrap, TOTP, audit
+│   └── login/          # Unified login page (Admin / POS Staff tabs)
+├── lib/
+│   ├── auth.ts         # NextAuth config + network hash check
+│   ├── roles.ts        # RBAC permission system
+│   ├── audit.ts        # Audit log helper
+│   ├── identity.ts     # Machine fingerprinting
+│   └── totp.ts         # TOTP verification
+prisma/
+├── schema.prisma       # Data models
+└── seed.ts             # Initial DB seed
+```
+
+---
+
+## Environment Variables
+
+See `.env.example` for the full list. Required variables:
+
+```env
+DATABASE_URL="file:./prisma/awp.db"
+NEXTAUTH_SECRET="<generate a strong random secret>"
+NEXTAUTH_URL="http://localhost:3000"
+NEXT_PUBLIC_ADMIN_UPI="your-upi-id@bank"
+```
+
+Optional (for email-based admin password recovery):
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@example.com
+SMTP_PASS=your-app-password
+SMTP_FROM=noreply@example.com
+```
+
+> ⚠️ **Never commit your `.env` file.** It is excluded by `.gitignore`.
+
+---
+
+## Production Build (Electron Installer)
 
 ```bash
 npm run electron:build:win
 ```
 
-This automatically performs:
+Outputs a self-contained Windows installer at `dist/ABCD Work Platform Setup <version>.exe`.
 
-- Bundled Node runtime download
-- Prisma client generation
-- Prisma DB push
-- Prisma seed
-- Next.js production build
-- Electron artifact preparation
-- NSIS installer creation
+The build pipeline automatically:
+- Downloads a bundled Node.js runtime
+- Generates Prisma client
+- Pushes schema and seeds the database
+- Builds Next.js in production mode
+- Packages everything into an NSIS installer
 
-Output setup file:
+---
 
-- dist/ABCD Work Platform Setup 1.0.5.exe
+## Security Notes
 
-## Runtime Packaging Guarantees
+- **No default credentials** — the first admin account is created through a bootstrapped first-launch setup wizard
+- **Network hash binding** — admin logins are only accepted from the machine that originally bootstrapped the system
+- **Single-session tokens** — logging in from a second device immediately invalidates the first session
+- **Audit trail** — all sensitive actions (logins, member ops, password resets) are logged
 
-prepare-electron now fails fast if mandatory artifacts are missing, including:
+---
 
-- .next/standalone output
-- prisma/awp.db
-- node_modules/.prisma/client
-- node_modules/@prisma/client
-- node_modules/@prisma/engines
+## Suggested Release Workflow
 
-This prevents shipping broken installers.
-
-## Troubleshooting Startup Error
-
-If startup shows server exit code 1, most likely cause is a broken/old installer missing runtime artifacts. Rebuild and reinstall using the latest setup executable from dist.
-
-## Scan Report: Unnecessary Files and Folders
-
-Current workspace scan indicates these are generated artifacts and can be removed safely for cleanup (they will be recreated as needed):
-
-- .next (Next.js build cache/output)
-- dist (Electron packaging output)
-- node-runtime (downloaded bundled Node binary)
-- node_modules (installed dependencies)
-
-Observed approximate sizes:
-
-- .next: ~1729.71 MB
-- dist: ~997.5 MB
-- node-runtime: ~81.18 MB
-- node_modules: ~1676.64 MB
-
-Optional cleanup command (PowerShell):
-
-```powershell
-Remove-Item -Recurse -Force .next, dist, node-runtime, node_modules
-```
-
-Do not remove these source folders/files:
-
-- src
-- prisma/schema.prisma
-- prisma/seed.ts
-- electron
-- scripts
-- package.json
-- electron-builder.yml
-
-## Suggested Release Flow
-
-1. Pull latest source.
-2. Run npm install.
-3. Run npm run electron:build:win.
-4. Share only the generated setup file from dist.
-5. End user installs and launches app (no manual Node installation required).
+1. Pull latest source
+2. Run `npm install`
+3. Run `npm run electron:build:win`
+4. Share the generated `.exe` from `dist/` with the end user
+5. End user installs and launches — no manual Node.js installation required
