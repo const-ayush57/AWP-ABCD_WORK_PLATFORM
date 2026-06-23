@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VerifyAdminDialog } from "./VerifyAdminDialog";
 import { CheckCircle2, XCircle, Clock } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 interface AdminRequest {
   id: string;
@@ -27,10 +26,10 @@ interface AdminRequest {
 
 interface AdminRequestsListProps {
   requests: AdminRequest[];
+  onVerify?: () => void;
 }
 
-export function AdminRequestsList({ requests }: AdminRequestsListProps) {
-  const router = useRouter();
+export function AdminRequestsList({ requests, onVerify }: AdminRequestsListProps) {
   const [selectedRequest, setSelectedRequest] = useState<AdminRequest | null>(null);
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
 
@@ -124,7 +123,7 @@ export function AdminRequestsList({ requests }: AdminRequestsListProps) {
         open={verifyDialogOpen}
         onOpenChange={setVerifyDialogOpen}
         request={selectedRequest}
-        onVerify={() => router.refresh()}
+        onVerify={onVerify}
       />
     </>
   );

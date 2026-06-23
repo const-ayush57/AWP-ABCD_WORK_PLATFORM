@@ -1,18 +1,23 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+"use client";
+
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SignOutButton } from "@/components/SignOutButton";
 import { hasPermission } from "@/lib/roles";
+import { useSession } from "@/components/SessionContext";
 
-export default async function POSLayout({
+export default function POSLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    const session = await getServerSession(authOptions);
+    const { data: session, status } = useSession();
 
-    if (!session || !["MEMBER", "CLERK", "MANAGER", "ADMIN"].includes(session.user.role)) {
+    if (status === "loading") {
+        return <div className="min-h-screen bg-[#050505] flex items-center justify-center">Loading...</div>;
+    }
+
+    if (!session || !session.user || !session.user.role || !["MEMBER", "CLERK", "MANAGER", "ADMIN"].includes(session.user.role)) {
         redirect("/login");
     }
 

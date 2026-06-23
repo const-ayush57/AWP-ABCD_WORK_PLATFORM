@@ -14,16 +14,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { KeyRound, Trash2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { secureAdminAction } from "./actions";
+import { DeleteMember, ResetMemberPassword } from "../../../wailsjs/go/main/App";
 
 export function AdminAuthDialog({
     targetMemberId,
     memberName,
-    actionType
+    actionType,
+    onSuccess,
 }: {
     targetMemberId: string;
     memberName: string;
-    actionType: "delete" | "reset"
+    actionType: "delete" | "reset";
+    onSuccess: () => void;
 }) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -32,33 +34,57 @@ export function AdminAuthDialog({
     const [showAdminPassword, setShowAdminPassword] = useState(false);
     const [passwordError, setPasswordError] = useState("");
 
-    async function handleSubmit(formData: FormData) {
+    const isDelete = actionType === "delete";
+
+    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
         setPasswordError("");
-        if (!isDelete) {
-            const newPassword = formData.get("newPassword") as string;
-            const confirmPassword = formData.get("confirmPassword") as string;
-            if (newPassword !== confirmPassword) {
-                setPasswordError("Passwords do not match");
-                return;
-            }
+
+        const formData = new FormData(e.currentTarget);
+        const adminPassword = formData.get("adminPassword") as string;
+        const newPassword = formData.get("newPassword") as string;
+        const confirmPassword = formData.get("confirmPassword") as string;
+        const sessionToken = localStorage.getItem("sessionToken") || "";
+
+        if (!isDelete && newPassword !== confirmPassword) {
+            setPasswordError("Passwords do not match");
+            return;
+        }
+
+        if (!sessionToken) {
+            toast.error("Missing session. Please sign in again.");
+            return;
         }
 
         setLoading(true);
-        formData.append("targetMemberId", targetMemberId);
-        formData.append("actionType", actionType);
+        try {
+            const result = isDelete
+                ? await DeleteMember({
+                      sessionToken,
+                      adminPassword,
+                      targetMemberId,
+                  })
+                : await ResetMemberPassword({
+                      sessionToken,
+                      adminPassword,
+                      targetMemberId,
+                      newPassword: newPassword || "",
+                  });
 
-        const result = await secureAdminAction(formData);
-
-        if (result?.error) {
-            toast.error(result.error);
-        } else if (result?.success) {
-            toast.success(`Member successfully ${actionType === "delete" ? "deleted" : "reset"}!`);
-            setOpen(false);
+            if (result?.error) {
+                toast.error(result.error);
+            } else if (result?.success) {
+                toast.success(`Member successfully ${actionType === "delete" ? "deleted" : "password reset"}!`);
+                setOpen(false);
+                onSuccess();
+            }
+        } catch (err) {
+            toast.error("An unexpected error occurred.");
+            console.error(err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
-
-    const isDelete = actionType === "delete";
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -83,7 +109,7 @@ export function AdminAuthDialog({
                         {isDelete ? " This will permanently delete the operator." : " This will forcefully log out the operator and change their password."}
                     </DialogDescription>
                 </DialogHeader>
-                <form action={handleSubmit} className="space-y-4 pt-4">
+                <form onSubmit={handleSubmit} className="space-y-4 pt-4">
                     {!isDelete && (
                         <>
                             <div className="space-y-2">

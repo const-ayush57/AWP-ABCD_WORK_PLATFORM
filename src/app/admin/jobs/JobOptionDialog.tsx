@@ -19,15 +19,18 @@ export function JobOptionDialog({
     onSubmit,
 }: {
     jobId: string;
-    onSubmit: (formData: FormData) => void;
+    onSubmit: (payload: { jobId: string; name: string; additionalCost: number }) => Promise<void>;
 }) {
     const [open, setOpen] = useState(false);
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
-        formData.append("jobId", jobId);
-        await onSubmit(formData);
+        await onSubmit({
+            jobId,
+            name: String(formData.get("name") || "").trim(),
+            additionalCost: Number(formData.get("additionalCost") || 0),
+        });
         setOpen(false);
     }
 

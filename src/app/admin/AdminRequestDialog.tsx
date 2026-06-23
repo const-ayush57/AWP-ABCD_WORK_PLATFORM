@@ -13,10 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { KeyRound, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
-export function AdminRequestDialog() {
-  const router = useRouter();
+import { CreateAdminRequest, VerifyAdminRequest } from "../../wailsjs/go/main/App";
+
+export function AdminRequestDialog({ onSuccess }: { onSuccess?: () => void }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -54,28 +54,24 @@ export function AdminRequestDialog() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/admin/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          newAdminUsername: formData.newAdminUsername,
-          newAdminName: formData.newAdminName,
-          newAdminPassword: formData.newAdminPassword,
-          verificationType: "PIN",
-        }),
+      const sessionToken = localStorage.getItem("sessionToken") || "";
+      const response = await CreateAdminRequest({
+        sessionToken,
+        newAdminUsername: formData.newAdminUsername,
+        newAdminName: formData.newAdminName,
+        newAdminPassword: formData.newAdminPassword,
+        verificationType: "PIN",
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Failed to create admin request");
+      if (!response?.success) {
+        setError(response?.error || "Failed to create admin request");
         return;
       }
 
-      setRequestId(data.requestId);
-      setVerificationCode(typeof data.verificationCode === "string" ? data.verificationCode : "");
+      setRequestId(response.requestId || "");
+      setVerificationCode(typeof response.verificationCode === "string" ? response.verificationCode : "");
       setVerificationHelp(
-        typeof data.verificationCode === "string"
+        typeof response.verificationCode === "string"
           ? "Development mode: code prefilled from API response."
           : "Enter the verification code from your secure approval channel."
       );
@@ -96,20 +92,16 @@ export function AdminRequestDialog() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/admin/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requestId,
-          verificationCode: verificationCode.trim(),
-          action: "approve",
-        }),
+      const sessionToken = localStorage.getItem("sessionToken") || "";
+      const response = await VerifyAdminRequest({
+        sessionToken,
+        requestId,
+        verificationCode: verificationCode.trim(),
+        action: "approve",
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Verification failed");
+      if (!response?.success) {
+        setError(response?.error || "Verification failed");
         return;
       }
 
@@ -124,7 +116,7 @@ export function AdminRequestDialog() {
       setVerificationCode("");
       setVerificationHelp("");
       setStep("form");
-      router.refresh();
+      onSuccess?.();
     } catch {
       setError("Network error occurred");
     } finally {

@@ -1,43 +1,47 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { getAnalyticsData, AnalyticsFilters } from "./actions";
 import { BarChart, DonutChart, Text, Metric } from "@tremor/react";
 import { Printer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
+import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable, SortingState, ColumnDef } from "@tanstack/react-table";
+import { GetAnalyticsData } from "../../wailsjs/go/main/App";
+import { services, models } from "../../wailsjs/go/models";
+
+type AnalyticsData = services.AnalyticsResponse;
+type TransactionRow = models.Transaction & { member?: { name?: string } };
 
 export default function AnalyticsDashboard({ initialMembers }: { initialMembers: { id: string, name: string }[] }) {
-    const [filters, setFilters] = useState<AnalyticsFilters>({
+    const [filters, setFilters] = useState<services.AnalyticsFilters>(new services.AnalyticsFilters({
         dateRange: "7days",
         memberId: "all",
         paymentMethod: "all",
-    });
+        category: "all"
+    }));
 
-    const [data, setData] = useState<any>(null);
-    const [sorting, setSorting] = useState<any>([]);
-    const [printingRow, setPrintingRow] = useState<any>(null); // For isolated print receipts
+    const [data, setData] = useState<AnalyticsData | null>(null);
+    const [sorting, setSorting] = useState<SortingState>([]);
+    const [printingRow, setPrintingRow] = useState<TransactionRow | null>(null);
 
     useEffect(() => {
-        getAnalyticsData(filters).then(setData);
+        GetAnalyticsData(filters).then(setData);
     }, [filters]);
 
-    const columns = useMemo(() => [
+    const columns = useMemo<ColumnDef<TransactionRow>[]>(() => [
         {
             accessorKey: "id",
             header: "Transaction ID",
-            cell: (info: any) => <span className="font-mono text-xs text-gray-500">{info.getValue()}</span>
+            cell: (info) => <span className="font-mono text-xs text-gray-500">{info.getValue() as string}</span>
         },
         {
             accessorKey: "createdAt",
             header: "Time",
-            cell: (info: any) => new Date(info.getValue()).toLocaleString()
+            cell: (info) => new Date(info.getValue() as Date | string).toLocaleString()
         },
         {
-            accessorFn: (row: any) => row.member.name,
+            accessorFn: (row) => row.member?.name || 'Unknown',
             id: "memberName",
             header: "Member",
         },
@@ -48,12 +52,12 @@ export default function AnalyticsDashboard({ initialMembers }: { initialMembers:
         {
             accessorKey: "totalAmount",
             header: "Amount",
-            cell: (info: any) => <span className="font-bold text-gray-900 dark:text-white">₹{info.getValue().toFixed(2)}</span>
+            cell: (info) => <span className="font-bold text-gray-900 dark:text-white">₹{(info.getValue() as number).toFixed(2)}</span>
         },
         {
             id: "actions",
             header: "",
-            cell: (info: any) => (
+            cell: (info) => (
                 <button 
                     onClick={() => {
                         setPrintingRow(info.row.original);
@@ -68,6 +72,7 @@ export default function AnalyticsDashboard({ initialMembers }: { initialMembers:
         }
     ], []);
 
+    // eslint-disable-next-line react-hooks/incompatible-library
     const table = useReactTable({
         data: data?.transactions || [],
         columns,
@@ -77,8 +82,8 @@ export default function AnalyticsDashboard({ initialMembers }: { initialMembers:
         getSortedRowModel: getSortedRowModel(),
     });
 
-    const handleFilterChange = (key: keyof AnalyticsFilters, value: string) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
+    const handleFilterChange = (key: keyof services.AnalyticsFilters, value: string) => {
+        setFilters((prev: services.AnalyticsFilters) => new services.AnalyticsFilters({ ...prev, [key]: value }));
     };
 
     if (!data) return <div className="p-8 text-center text-gray-500">Loading Mission Control...</div>;
@@ -107,7 +112,7 @@ export default function AnalyticsDashboard({ initialMembers }: { initialMembers:
                         <SelectTrigger className="w-full sm:w-[140px]"><SelectValue placeholder="All Members" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Members</SelectItem>
-                            {initialMembers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                            {initialMembers.map(m => <SelectItem key={m.id} value={m.id || `empty-id-${m.name}`}>{m.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
 
@@ -129,7 +134,7 @@ export default function AnalyticsDashboard({ initialMembers }: { initialMembers:
                     </CardHeader>
                     <CardContent>
                         <BarChart
-                            data={data.revenueFlow}
+                            data={data.revenueFlow || []}
                             index="date"
                             categories={["Revenue"]}
                             colors={["blue"]}
@@ -147,7 +152,7 @@ export default function AnalyticsDashboard({ initialMembers }: { initialMembers:
                     </CardHeader>
                     <CardContent className="flex flex-col items-center justify-center">
                         <DonutChart
-                            data={data.memberShare}
+                            data={data.memberShare || []}
                             category="revenue"
                             index="name"
                             valueFormatter={(number) => `₹${Intl.NumberFormat("en-IN").format(number)}`}
@@ -156,7 +161,7 @@ export default function AnalyticsDashboard({ initialMembers }: { initialMembers:
                         />
                         <div className="mt-6 text-center">
                             <Text>Filtered Revenue</Text>
-                            <Metric>₹{data.totalRevenue.toFixed(2)}</Metric>
+                            <Metric>₹{data.totalRevenue?.toFixed(2) || "0.00"}</Metric>
                         </div>
                     </CardContent>
                 </Card>
@@ -168,12 +173,13 @@ export default function AnalyticsDashboard({ initialMembers }: { initialMembers:
                 </CardHeader>
                 <CardContent>
                     <BarChart
-                        data={data.jobPopularity}
+                        data={data.jobPopularity || []}
                         index="job"
                         categories={["Count"]}
                         colors={["indigo"]}
                         layout="horizontal"
                         className="h-72 mt-4"
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         customTooltip={(props: any) => {
                             const { payload, active } = props;
                             if (!active || !payload || payload.length === 0) return null;
@@ -270,7 +276,7 @@ export default function AnalyticsDashboard({ initialMembers }: { initialMembers:
                         
                         <div className="border-t-2 border-dashed border-gray-300 pt-4 flex justify-between items-center">
                             <p className="font-bold uppercase tracking-wider text-gray-500 text-sm">Total Paid</p>
-                            <p className="text-2xl font-black font-mono">₹{printingRow.totalAmount.toFixed(2)}</p>
+                            <p className="text-2xl font-black font-mono">₹{printingRow.totalAmount?.toFixed(2) || "0.00"}</p>
                         </div>
                         <p className="text-center text-[9px] text-gray-400 uppercase font-bold tracking-widest mt-12 bg-gray-50 py-2 rounded-md">Thank you for assigning jobs with us.</p>
                     </div>

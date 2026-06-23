@@ -7,10 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Network, Copy, Check, ShieldCheck, RefreshCw } from "lucide-react";
+import { GetServerConfig, GetMachineConfig, UpdateServerConfig, GetAuditLogsDetailed } from "../../../wailsjs/go/main/App";
 
 interface ServerConfig {
   host: string;
   port: number;
+  upiId: string | null;
   isEnabled: boolean;
 }
 
@@ -18,19 +20,21 @@ interface AuditEvent {
   id: string;
   action: string;
   status: string;
-  message: string | null;
-  createdAt: string;
-  actor: { username: string; name: string; role: string } | null;
+  message?: string;
+  // Go type: time (serialized as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createdAt: any;
+  actor?: { username: string; name: string; role: string };
 }
 
 const ACTION_LABELS: Record<string, { label: string; color: string }> = {
-  MEMBER_CREATE:         { label: "Member Created",   color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
-  MEMBER_DELETE:         { label: "Member Deleted",   color: "bg-rose-100 text-rose-800 border-rose-200" },
-  MEMBER_PASSWORD_RESET: { label: "Password Reset",   color: "bg-amber-100 text-amber-800 border-amber-200" },
-  ANALYTICS_VIEW:        { label: "Analytics Viewed", color: "bg-blue-100 text-blue-800 border-blue-200" },
-  LOGIN_SUCCESS:         { label: "Login",            color: "bg-gray-100 text-gray-700 border-gray-200" },
-  LOGIN_FAILED:          { label: "Login Failed",     color: "bg-red-100 text-red-800 border-red-200" },
-  ADMIN_BOOTSTRAP:       { label: "Admin Bootstrap",  color: "bg-purple-100 text-purple-800 border-purple-200" },
+  MEMBER_CREATE: { label: "Member Created", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  MEMBER_DELETE: { label: "Member Deleted", color: "bg-rose-100 text-rose-800 border-rose-200" },
+  MEMBER_PASSWORD_RESET: { label: "Password Reset", color: "bg-amber-100 text-amber-800 border-amber-200" },
+  ANALYTICS_VIEW: { label: "Analytics Viewed", color: "bg-blue-100 text-blue-800 border-blue-200" },
+  LOGIN_SUCCESS: { label: "Login", color: "bg-gray-100 text-gray-700 border-gray-200" },
+  LOGIN_FAILED: { label: "Login Failed", color: "bg-red-100 text-red-800 border-red-200" },
+  ADMIN_BOOTSTRAP: { label: "Admin Bootstrap", color: "bg-purple-100 text-purple-800 border-purple-200" },
 };
 
 export default function SettingsPage() {
@@ -39,7 +43,9 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [serverHost, setServerHost] = useState("");
   const [serverPort, setServerPort] = useState("3000");
+  const [adminUpiId, setAdminUpiId] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [networkKey, setNetworkKey] = useState("");
 
   // Audit log state — loaded on demand, not on mount
   const [auditLogs, setAuditLogs] = useState<AuditEvent[]>([]);
@@ -48,34 +54,48 @@ export default function SettingsPage() {
   // Prevent rapid re-fetches (S3): block for 2 s after load completes
   const auditCooldownRef = useRef(false);
 
+
+
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const res = await fetch("/api/system/server-config");
-        const data = await res.json();
-        if (data.success) {
-          setServerConfig(data.config);
-          setServerHost(data.config.host);
-          setServerPort(String(data.config.port));
+        const config = await GetServerConfig();
+        if (config) {
+          const mapped = {
+            host: config.serverHost,
+            port: config.serverPort,
+            upiId: config.adminUpiId || null,
+            isEnabled: config.isEnabled,
+          };
+          setServerConfig(mapped);
+          setServerHost(mapped.host);
+          setServerPort(String(mapped.port));
+          setAdminUpiId(mapped.upiId || "");
+        }
+
+        const machConfig = await GetMachineConfig();
+        if (machConfig) {
+          setNetworkKey(machConfig.networkKey || "");
         }
       } catch (error) {
-        console.error("Failed to load server config:", error);
+        console.error("Failed to load configs:", error);
         toast.error("Failed to load server configuration");
       } finally {
         setIsLoading(false);
       }
     };
     loadConfig();
+
   }, []);
 
   const loadAuditLogs = useCallback(async () => {
     if (auditLoading || auditCooldownRef.current) return; // debounce rapid clicks
     setAuditLoading(true);
     try {
-      const res = await fetch("/api/system/audit-logs?limit=100");
-      const data = await res.json();
-      if (data.success) {
-        setAuditLogs(data.logs);
+      const sessionToken = localStorage.getItem("sessionToken") || "";
+      const logs = await GetAuditLogsDetailed({ sessionToken, limit: 100 });
+      if (logs) {
+        setAuditLogs(logs);
         setAuditLoaded(true);
       } else {
         toast.error("Failed to load audit logs");
@@ -94,16 +114,18 @@ export default function SettingsPage() {
     if (!serverHost.trim()) { toast.error("Server host is required"); return; }
     const port = parseInt(serverPort, 10);
     if (isNaN(port) || port < 1 || port > 65535) { toast.error("Port must be between 1 and 65535"); return; }
+    if (!adminUpiId.trim()) { toast.error("UPI ID is required"); return; }
     setIsSaving(true);
     try {
-      const res = await fetch("/api/system/server-config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serverHost: serverHost.trim(), serverPort: port }),
+      const sessionToken = localStorage.getItem("sessionToken") || "";
+      const res = await UpdateServerConfig({
+        sessionToken,
+        serverHost: serverHost.trim(),
+        serverPort: port,
+        adminUpiId: adminUpiId.trim(),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || "Failed to save configuration"); return; }
-      setServerConfig(data.config);
+      if (!res?.success || !res.config) { toast.error(res?.error || "Failed to save configuration"); return; }
+      setServerConfig({ host: res.config.host, port: res.config.port, upiId: res.config.upiId, isEnabled: res.config.isEnabled });
       toast.success("Server configuration saved successfully");
     } catch (error) {
       console.error("Failed to save config:", error);
@@ -176,6 +198,17 @@ export default function SettingsPage() {
               <p className="text-xs text-gray-500 dark:text-gray-400">Port number (default: 3000)</p>
             </div>
           </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Admin UPI ID</label>
+            <Input
+              type="text"
+              value={adminUpiId}
+              onChange={(e) => setAdminUpiId(e.target.value)}
+              placeholder="e.g., yourupi@bank"
+              className="h-10"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400">Used for QR billing in all member POS terminals</p>
+          </div>
           <Button onClick={handleSave} disabled={isSaving} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
             {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : "Save Configuration"}
           </Button>
@@ -204,12 +237,42 @@ export default function SettingsPage() {
                   {copiedField === "address" ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-gray-500" />}
                 </button>
               </div>
+              <div className="flex items-center justify-between p-3 bg-white dark:bg-black/20 rounded-lg border border-green-200 dark:border-green-900/30">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Billing UPI ID</p>
+                  <p className="font-mono font-semibold text-green-700 dark:text-green-400">{serverConfig.upiId || "Not set"}</p>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(serverConfig.upiId || "", "upi")}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded transition-colors disabled:opacity-40"
+                  title="Copy to clipboard"
+                  disabled={!serverConfig.upiId}
+                >
+                  {copiedField === "upi" ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-gray-500" />}
+                </button>
+              </div>
+              {networkKey && (
+                <div className="flex items-center justify-between p-3 bg-white dark:bg-black/20 rounded-lg border border-green-200 dark:border-green-900/30">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Network Security Key</p>
+                    <p className="font-mono font-semibold text-green-700 dark:text-green-400 tracking-wider">{networkKey}</p>
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(networkKey, "netkey")}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded transition-colors"
+                    title="Copy to clipboard"
+                  >
+                    {copiedField === "netkey" ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-gray-500" />}
+                  </button>
+                </div>
+              )}
               <div className="p-3 bg-white dark:bg-black/20 rounded-lg border border-green-200 dark:border-green-900/30 space-y-2">
                 <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">Connection Steps:</p>
-                <ol className="text-sm text-gray-700 dark:text-gray-300 space-y-1 list-decimal list-inside">
-                  <li>Member opens browser and goes to the server address above</li>
-                  <li>On login screen, click &quot;POS Staff&quot; tab</li>
-                  <li>Enter credentials to login</li>
+                <ol className="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 list-decimal list-inside">
+                  <li>Open the AWP billing app on a member POS terminal machine</li>
+                  <li>On the initial setup screen, choose <strong>POS Terminal</strong> role</li>
+                  <li>Enter the Server IP address, Port, and the <strong>Network Security Key</strong> shown above</li>
+                  <li>Click <strong>Test Connection</strong> to verify, then confirm and launch</li>
                 </ol>
               </div>
             </div>
@@ -233,6 +296,8 @@ export default function SettingsPage() {
           <p><strong>Network:</strong> Members must be on the same WiFi/LAN as this machine.</p>
         </CardContent>
       </Card>
+
+
 
       {/* ── Audit Logs ────────────────────────────────────── */}
       <Card id="audit-logs" className="border border-gray-200 dark:border-white/10">

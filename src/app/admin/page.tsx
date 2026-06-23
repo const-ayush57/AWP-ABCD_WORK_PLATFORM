@@ -1,5 +1,6 @@
-import prisma from "@/lib/prisma";
-import { startOfDay, endOfDay } from "date-fns";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Users, FileText, CheckCircle, IndianRupee, Trophy, Plus, KeyRound, Activity } from "lucide-react";
 import Link from "next/link";
@@ -8,62 +9,61 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck } from "lucide-react";
+import { GetAnalyticsData, GetAllJobs, GetMembers } from "../../wailsjs/go/main/App";
+import { services, models } from "../../wailsjs/go/models";
+import { useRouter } from "next/navigation";
 
+export default function AdminDashboard() {
+    const router = useRouter();
+    const [loading, setLoading] = useState(true);
+    const [totalJobs, setTotalJobs] = useState(0);
+    const [totalUsers, setTotalUsers] = useState(0);
+    const [todayTransactions, setTodayTransactions] = useState(0);
+    const [totalRevenue, setTotalRevenue] = useState(0);
+    const [todayRevenue, setTodayRevenue] = useState(0);
+    const [topMemberName, setTopMemberName] = useState("N/A");
+    const [topMemberRevenue, setTopMemberRevenue] = useState(0);
+    const [members, setMembers] = useState<models.User[]>([]);
+    const [analyticsMembers, setAnalyticsMembers] = useState<{id: string, name: string}[]>([]);
 
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const [jobsData, membersData, todayAnalytics, allTimeAnalytics] = await Promise.all([
+                    GetAllJobs(),
+                    GetMembers(),
+                    GetAnalyticsData(new services.AnalyticsFilters({ dateRange: "today", memberId: "all", paymentMethod: "all", category: "all" })),
+                    GetAnalyticsData(new services.AnalyticsFilters({ dateRange: "all", memberId: "all", paymentMethod: "all", category: "all" }))
+                ]);
 
-export default async function AdminDashboard() {
-    const todayStart = startOfDay(new Date());
-    const todayEnd = endOfDay(new Date());
+                setTotalJobs(jobsData?.length || 0);
+                const memberUsers = (membersData || []).filter((m: { role?: string }) => m.role === "MEMBER");
+                setTotalUsers(memberUsers.length);
+                setMembers(memberUsers);
+                setAnalyticsMembers(memberUsers.map((m: { id?: string, name?: string }) => ({ id: m.id || "", name: m.name || "" })));
 
-    // 1. Parallel Data Fetching
-    const [totalJobs, totalUsers, todayTransactions, totalRevenue, todayRevenue, topMemberAggregation, members, analyticsMembers] = await Promise.all([
-        prisma.jobTemplate.count(),
-        prisma.user.count({ where: { role: "MEMBER" } }),
-        prisma.transaction.count({
-            where: {
-                createdAt: { gte: todayStart, lte: todayEnd },
-            },
-        }),
-        prisma.transaction.aggregate({
-            _sum: { totalAmount: true },
-            where: { status: "PAID" },
-        }),
-        prisma.transaction.aggregate({
-            _sum: { totalAmount: true },
-            where: { status: "PAID", createdAt: { gte: todayStart, lte: todayEnd } },
-        }),
-        prisma.transaction.groupBy({
-            by: ["memberId"],
-            _sum: { totalAmount: true },
-            where: { status: "PAID" },
-            orderBy: { _sum: { totalAmount: "desc" } },
-            take: 1,
-        }),
-        prisma.user.findMany({
-            where: { role: "MEMBER", isOnline: true },
-            select: { id: true, name: true, username: true, updatedAt: true, isOnline: true },
-            orderBy: { updatedAt: "desc" },
-            take: 5,
-        }),
-        prisma.user.findMany({
-            where: { role: "MEMBER" },
-            select: { id: true, name: true },
-            orderBy: { name: "asc" },
-        }),
-    ]);
+                setTodayTransactions(todayAnalytics.transactionCount);
+                setTodayRevenue(todayAnalytics.totalRevenue);
+                setTotalRevenue(allTimeAnalytics.totalRevenue);
 
-    let topMemberName = "N/A";
-    let topMemberRevenue = 0;
+                if (allTimeAnalytics.memberShare && allTimeAnalytics.memberShare.length > 0) {
+                    // memberShare is not strictly sorted by revenue in the backend, so let's sort it here to find top
+                    const sortedShares = [...allTimeAnalytics.memberShare].sort((a: { revenue: number }, b: { revenue: number }) => b.revenue - a.revenue);
+                    setTopMemberName(sortedShares[0].name);
+                    setTopMemberRevenue(sortedShares[0].revenue);
+                }
+            } catch (error) {
+                console.error("Failed to load dashboard data:", error);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
 
-    if (topMemberAggregation.length > 0) {
-        const topMemberUser = await prisma.user.findUnique({
-            where: { id: topMemberAggregation[0].memberId },
-            select: { name: true }
-        });
-        topMemberName = topMemberUser?.name || "Unknown";
-        topMemberRevenue = topMemberAggregation[0]._sum.totalAmount || 0;
+    if (loading) {
+        return <div className="p-8 text-center text-gray-500">Loading Mission Control...</div>;
     }
-
 
     return (
         <div className="space-y-4 md:space-y-6 max-w-[1600px] mx-auto pb-12">
@@ -101,9 +101,9 @@ export default async function AdminDashboard() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold tracking-tighter text-emerald-600">₹{todayRevenue._sum.totalAmount?.toFixed(2) || "0.00"}</div>
+                        <div className="text-3xl font-bold tracking-tighter text-emerald-600">₹{todayRevenue.toFixed(2)}</div>
                         <p className="text-xs text-muted-foreground mt-1 font-medium">
-                            Collected today · <span className="text-blue-500">₹{totalRevenue._sum.totalAmount?.toFixed(2) || "0.00"} lifetime</span>
+                            Collected today · <span className="text-blue-500">₹{totalRevenue.toFixed(2)} lifetime</span>
                         </p>
                     </CardContent>
                 </Card>
@@ -162,7 +162,7 @@ export default async function AdminDashboard() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {members.map((member) => (
+                                {members.slice(0, 5).map((member) => (
                                     <TableRow key={member.id} className="hover:bg-gray-50/50">
                                         <TableCell className="font-medium">
                                             <div className="flex items-center gap-2">
@@ -202,21 +202,27 @@ export default async function AdminDashboard() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                        <Link href="/admin/jobs" className="block select-none">
-                            <Button className="rounded-xl w-full justify-start gap-2 bg-white dark:bg-white/5 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/30 hover:bg-blue-50 dark:hover:bg-white/10 hover:border-blue-300 shadow-sm h-10 transition-all">
-                                <Plus className="h-4 w-4" /> New Job Template
-                            </Button>
-                        </Link>
-                        <Link href="/admin/members" className="block select-none">
-                            <Button className="rounded-xl w-full justify-start gap-2 bg-white dark:bg-white/5 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/30 hover:bg-blue-50 dark:hover:bg-white/10 hover:border-blue-300 shadow-sm h-10 transition-all">
-                                <KeyRound className="h-4 w-4" /> Reset Passwords
-                            </Button>
-                        </Link>
-                        <Link href="/admin/members" className="block select-none">
-                            <Button className="rounded-xl w-full justify-start gap-2 bg-white dark:bg-white/5 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/30 hover:bg-blue-50 dark:hover:bg-white/10 hover:border-blue-300 shadow-sm h-10 transition-all">
-                                <Users className="h-4 w-4" /> Add Member
-                            </Button>
-                        </Link>
+                        <Button
+                            type="button"
+                            onClick={() => router.push("/admin/jobs")}
+                            className="rounded-xl w-full justify-start gap-2 bg-white dark:bg-white/5 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/30 hover:bg-blue-50 dark:hover:bg-white/10 hover:border-blue-300 shadow-sm h-10 transition-all"
+                        >
+                            <Plus className="h-4 w-4" /> New Job Template
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={() => router.push("/admin/members")}
+                            className="rounded-xl w-full justify-start gap-2 bg-white dark:bg-white/5 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/30 hover:bg-blue-50 dark:hover:bg-white/10 hover:border-blue-300 shadow-sm h-10 transition-all"
+                        >
+                            <KeyRound className="h-4 w-4" /> Reset Passwords
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={() => router.push("/admin/members")}
+                            className="rounded-xl w-full justify-start gap-2 bg-white dark:bg-white/5 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/30 hover:bg-blue-50 dark:hover:bg-white/10 hover:border-blue-300 shadow-sm h-10 transition-all"
+                        >
+                            <Users className="h-4 w-4" /> Add Member
+                        </Button>
                     </CardContent>
                 </Card>
 

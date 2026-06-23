@@ -17,14 +17,18 @@ import { Plus } from "lucide-react";
 export function JobTemplateDialog({
     onSubmit,
 }: {
-    onSubmit: (formData: FormData) => void;
+    onSubmit: (payload: { title: string; category: string; basePrice: number }) => Promise<void>;
 }) {
     const [open, setOpen] = useState(false);
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
-        await onSubmit(formData);
+        await onSubmit({
+            title: String(formData.get("title") || "").trim(),
+            category: String(formData.get("category") || "").trim(),
+            basePrice: Number(formData.get("basePrice") || 0),
+        });
         setOpen(false);
     }
 

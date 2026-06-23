@@ -2,9 +2,11 @@
 
 import { TableRow, TableCell } from "@/components/ui/table";
 import { AdminAuthDialog } from "./AdminAuthDialog";
+import type { services } from "../../../wailsjs/go/models";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function MemberRow({ member }: { member: any }) {
+type MemberData = services.MemberWithStats;
+
+export function MemberRow({ member, onAction }: { member: MemberData; onAction: () => void }) {
     return (
         <TableRow className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors">
             <TableCell className="font-medium">
@@ -32,11 +34,11 @@ export function MemberRow({ member }: { member: any }) {
                     MEMBER
                 </span>
             </TableCell>
-            <TableCell>{member._count?.transactions || 0} jobs</TableCell>
+            <TableCell>{member.transactionCount || 0} jobs</TableCell>
             <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
-                    <AdminAuthDialog actionType="reset" targetMemberId={member.id} memberName={member.name} />
-                    <AdminAuthDialog actionType="delete" targetMemberId={member.id} memberName={member.name} />
+                    <AdminAuthDialog actionType="reset" targetMemberId={member.id} memberName={member.name} onSuccess={onAction} />
+                    <AdminAuthDialog actionType="delete" targetMemberId={member.id} memberName={member.name} onSuccess={onAction} />
                 </div>
             </TableCell>
         </TableRow>

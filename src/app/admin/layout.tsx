@@ -1,22 +1,34 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import Link from "next/link";
-import { LayoutDashboard, Settings, Users, KeyRound, Sliders } from "lucide-react";
+"use client";
+
+import { useEffect } from "react";
+import { LayoutDashboard, Settings, Users, KeyRound, Sliders, Monitor } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { MobileSidebar } from "@/components/MobileSidebar";
 import { hasPermission } from "@/lib/roles";
+import { useSession } from "@/components/SessionContext";
+import { useRouter } from "next/navigation";
 
-export default async function AdminLayout({
+export default function AdminLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    const session = await getServerSession(authOptions);
+    const { data: session, status } = useSession();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (status !== "loading" && (!session || !hasPermission(session.user.role, "ADMIN_PANEL"))) {
+            router.replace("/login");
+        }
+    }, [session, status, router]);
+
+    if (status === "loading") {
+        return <div className="flex h-screen items-center justify-center bg-gray-100 dark:bg-[#050505]">Loading...</div>;
+    }
 
     if (!session || !hasPermission(session.user.role, "ADMIN_PANEL")) {
-        const { redirect } = await import("next/navigation");
-        redirect("/login");
+        return <div className="flex h-screen items-center justify-center bg-gray-100 dark:bg-[#050505]">Redirecting...</div>;
     }
 
     const sidebarContent = (
@@ -26,42 +38,49 @@ export default async function AdminLayout({
                     ABCD WORK PLATFORM
                 </h1>
             </div>
-            <nav className="p-4 space-y-2">
-                <Link
-                    href="/admin"
-                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none"
+            <nav className="p-4 space-y-2 flex flex-col">
+                <button
+                    onClick={() => router.push("/admin")}
+                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none w-full text-left"
                 >
                     <LayoutDashboard size={20} />
                     <span className="font-medium">Dashboard</span>
-                </Link>
-                <Link
-                    href="/admin/admins"
-                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none"
+                </button>
+                <button
+                    onClick={() => router.push("/admin/admins")}
+                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none w-full text-left"
                 >
                     <KeyRound size={20} />
                     <span className="font-medium">Admin Management</span>
-                </Link>
-                <Link
-                    href="/admin/jobs"
-                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none"
+                </button>
+                <button
+                    onClick={() => router.push("/admin/jobs")}
+                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none w-full text-left"
                 >
                     <Settings size={20} />
                     <span className="font-medium">Job Manager</span>
-                </Link>
-                <Link
-                    href="/admin/members"
-                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none"
+                </button>
+                <button
+                    onClick={() => router.push("/admin/members")}
+                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none w-full text-left"
                 >
                     <Users size={20} />
                     <span className="font-medium">Members</span>
-                </Link>
-                <Link
-                    href="/admin/settings"
-                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none"
+                </button>
+                <button
+                    onClick={() => router.push("/pos")}
+                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none w-full text-left"
+                >
+                    <Monitor size={20} />
+                    <span className="font-medium">POS Terminal</span>
+                </button>
+                <button
+                    onClick={() => router.push("/admin/settings")}
+                    className="flex items-center space-x-3 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors select-none w-full text-left"
                 >
                     <Sliders size={20} />
                     <span className="font-medium">Settings</span>
-                </Link>
+                </button>
             </nav>
             <div className="absolute bottom-0 w-64 p-4 border-t border-gray-200 dark:border-white/10">
                 <SignOutButton />

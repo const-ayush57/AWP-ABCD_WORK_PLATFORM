@@ -90,3 +90,8 @@ SMTP_SETUP_GUIDE.md
 # ── Electron / Packaged App Artifacts ────────────────────────────────────────
 /release/
 /dist-electron/
+build-log.txt
+lint_output.txt
+lint_results.json
+package.json.md5
+

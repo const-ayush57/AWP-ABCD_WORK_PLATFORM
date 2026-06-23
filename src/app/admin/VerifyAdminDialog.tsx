@@ -18,7 +18,7 @@ import {
   X,
   Clock,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { VerifyAdminRequest } from "../../wailsjs/go/main/App";
 
 interface AdminRequest {
   id: string;
@@ -60,6 +60,10 @@ export function VerifyAdminDialog({
   }, [open]);
 
   const handleApprove = async () => {
+    if (!request?.id) {
+      setError("Request not found");
+      return;
+    }
     if (!verificationCode.trim()) {
       setError("Verification code is required");
       return;
@@ -68,20 +72,16 @@ export function VerifyAdminDialog({
     setLoading(true);
 
     try {
-      const response = await fetch("/api/admin/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requestId: request?.id,
-          verificationCode: verificationCode.trim(),
-          action: "approve",
-        }),
+      const sessionToken = localStorage.getItem("sessionToken") || "";
+      const response = await VerifyAdminRequest({
+        sessionToken,
+        requestId: request.id,
+        verificationCode: verificationCode.trim(),
+        action: "approve",
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Verification failed");
+      if (!response?.success) {
+        setError(response?.error || "Verification failed");
         return;
       }
 
@@ -90,7 +90,7 @@ export function VerifyAdminDialog({
         onOpenChange(false);
         onVerify?.();
       }, 2000);
-    } catch (err) {
+    } catch {
       setError("Network error occurred");
     } finally {
       setLoading(false);
@@ -98,6 +98,10 @@ export function VerifyAdminDialog({
   };
 
   const handleReject = async () => {
+    if (!request?.id) {
+      setError("Request not found");
+      return;
+    }
     if (!rejectionReason.trim()) {
       setError("Please provide a rejection reason");
       return;
@@ -106,25 +110,22 @@ export function VerifyAdminDialog({
     setRejecting(true);
 
     try {
-      const response = await fetch("/api/admin/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requestId: request?.id,
-          action: "reject",
-          rejectionReason: rejectionReason.trim(),
-        }),
+      const sessionToken = localStorage.getItem("sessionToken") || "";
+      const response = await VerifyAdminRequest({
+        sessionToken,
+        requestId: request.id,
+        action: "reject",
+        rejectionReason: rejectionReason.trim(),
       });
 
-      if (!response.ok) {
-        const data = await response.json();
-        setError(data.error || "Rejection failed");
+      if (!response?.success) {
+        setError(response?.error || "Rejection failed");
         return;
       }
 
       onOpenChange(false);
       onVerify?.();
-    } catch (err) {
+    } catch {
       setError("Network error occurred");
     } finally {
       setRejecting(false);

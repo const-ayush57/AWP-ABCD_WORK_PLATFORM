@@ -14,11 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-
-type CreateMemberResult = {
-    success?: boolean;
-    error?: string;
-};
+import { CreateMember } from "../../../wailsjs/go/main/App";
 
 // Isolated password fields with debounced mismatch detection
 function PasswordFields({
@@ -38,14 +34,12 @@ function PasswordFields({
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
-        // Clear error immediately when passwords match
         if (password && confirmPassword && password === confirmPassword) {
             if (debounceRef.current) clearTimeout(debounceRef.current);
             setPasswordError("");
             return;
         }
 
-        // Only show error after user stops typing for 600ms
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
             if (confirmPassword && password !== confirmPassword) {
@@ -99,11 +93,46 @@ function PasswordFields({
     );
 }
 
-export function MemberDialog({ createMember }: { createMember: (formData: FormData) => Promise<CreateMemberResult> }) {
+export function MemberDialog({ onSuccess }: { onSuccess: () => void }) {
     const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [passwordError, setPasswordError] = useState("");
+
+    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        if (passwordError) return;
+
+        const formData = new FormData(e.currentTarget);
+        const name = (formData.get("name") as string)?.trim();
+        const username = (formData.get("username") as string)?.trim();
+        const password = formData.get("password") as string;
+        const confirmPassword = formData.get("confirmPassword") as string;
+
+        if (password !== confirmPassword) {
+            setPasswordError("Passwords do not match");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const sessionToken = localStorage.getItem("sessionToken") || "";
+            const result = await CreateMember({ sessionToken, name, username, password, role: "MEMBER" });
+            if (result?.error) {
+                toast.error(result.error);
+            } else if (result?.success) {
+                toast.success("Member created successfully.");
+                setOpen(false);
+                onSuccess();
+            }
+        } catch (err) {
+            toast.error("An unexpected error occurred.");
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -119,20 +148,7 @@ export function MemberDialog({ createMember }: { createMember: (formData: FormDa
                         Add a new staff member. They will use the username and password to log in.
                     </DialogDescription>
                 </DialogHeader>
-                <form
-                    action={async (formData) => {
-                        if (passwordError) return;
-                        const result = await createMember(formData);
-                        if (result?.error) {
-                            toast.error(result.error);
-                            return;
-                        }
-
-                        toast.success("Member created successfully.");
-                        setOpen(false);
-                    }}
-                    className="space-y-4 pt-4"
-                >
+                <form onSubmit={handleSubmit} className="space-y-4 pt-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Full Name</Label>
                         <Input id="name" name="name" placeholder="John Doe" required />
@@ -141,7 +157,7 @@ export function MemberDialog({ createMember }: { createMember: (formData: FormDa
                         <Label htmlFor="username">Login Username</Label>
                         <Input id="username" name="username" placeholder="johndoe123" required />
                     </div>
-                        <PasswordFields
+                    <PasswordFields
                         showPassword={showPassword}
                         setShowPassword={setShowPassword}
                         showConfirmPassword={showConfirmPassword}
@@ -150,7 +166,9 @@ export function MemberDialog({ createMember }: { createMember: (formData: FormDa
                         setPasswordError={setPasswordError}
                     />
                     <div className="pt-4 flex justify-end">
-                        <Button type="submit">Create Member</Button>
+                        <Button type="submit" disabled={loading}>
+                            {loading ? "Creating..." : "Create Member"}
+                        </Button>
                     </div>
                 </form>
             </DialogContent>

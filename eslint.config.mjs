@@ -24,6 +24,8 @@ const eslintConfig = defineConfig([
     "electron/**",
     "scripts/**",
     "test-cpp-db.js",
+    "test-spawn.js",
+    "src/wailsjs/**",
   ]),
 ]);
 

@@ -1,7 +1,7 @@
-import prisma from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -22,76 +22,90 @@ import { Clock, CheckCircle, XCircle } from "lucide-react";
 import { AdminRequestDialog } from "../AdminRequestDialog";
 import { AdminRequestsList } from "../AdminRequestsList";
 import { hasPermission } from "@/lib/roles";
+import { useSession } from "@/components/SessionContext";
+import { GetAdminDashboardData } from "../../../wailsjs/go/main/App";
 
-export default async function AdminsPage() {
-  const session = await getServerSession(authOptions);
+interface AdminUser {
+  id: string;
+  name: string;
+  username: string;
+  createdAt: string;
+  isOnline: boolean;
+}
 
-  if (!hasPermission(session?.user?.role, "ADMIN_PANEL")) {
-    redirect("/unauthorized");
+interface AdminRequest {
+  id: string;
+  newAdminUsername: string;
+  newAdminName: string;
+  requestedBy: { name: string; username: string };
+  approvedBy?: { name: string; username: string };
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  status: string;
+  verifiedAt?: string | null;
+  rejectionReason?: string | null;
+}
+
+interface AdminDashboardData {
+  admins: AdminUser[];
+  authorityExists: boolean;
+  pendingRequests: AdminRequest[];
+  completedRequests: AdminRequest[];
+}
+
+export default function AdminsPage() {
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<AdminDashboardData>({
+    admins: [],
+    authorityExists: false,
+    pendingRequests: [],
+    completedRequests: [],
+  });
+
+  const loadDashboard = useCallback(async () => {
+    const token = localStorage.getItem("sessionToken") || "";
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await GetAdminDashboardData(token);
+      if (res) {
+        setData(res);
+      }
+    } catch (err) {
+      console.error("Failed to load admin dashboard data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === "loading") {
+      return;
+    }
+    if (!session || !hasPermission(session.user.role, "ADMIN_PANEL")) {
+      router.replace("/unauthorized");
+      return;
+    }
+    loadDashboard();
+  }, [status, session, router, loadDashboard]);
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-gray-500">
+        Loading admin management...
+      </div>
+    );
   }
 
-  // Fetch admin users
-  const [admins, authority] = await Promise.all([
-    prisma.user.findMany({
-    where: { role: "ADMIN" },
-    select: {
-      id: true,
-      name: true,
-      username: true,
-      createdAt: true,
-      isOnline: true,
-    },
-    orderBy: { createdAt: "desc" },
-    }),
-    prisma.networkAuthority.findUnique({ where: { id: "default" } }),
-  ]);
-
-  // Fetch pending admin creation requests
-  const pendingRequestsRaw = await prisma.adminCreationRequest.findMany({
-    where: {
-      status: "PENDING",
-      expiresAt: { gt: new Date() },
-    },
-    include: {
-      requestedBy: {
-        select: { name: true, username: true },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  // Serialize dates to strings for client component
-  const pendingRequests = pendingRequestsRaw.map((req) => ({
-    ...req,
-    createdAt: req.createdAt.toISOString(),
-    expiresAt: req.expiresAt.toISOString(),
-  }));
-
-  // Fetch completed requests (last 10)
-  const completedRequestsRaw = await prisma.adminCreationRequest.findMany({
-    where: {
-      status: { in: ["APPROVED", "REJECTED"] },
-    },
-    include: {
-      requestedBy: {
-        select: { name: true, username: true },
-      },
-      approvedBy: {
-        select: { name: true, username: true },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 10,
-  });
-
-  // Serialize dates
-  const completedRequests = completedRequestsRaw.map((req) => ({
-    ...req,
-    createdAt: req.createdAt.toISOString(),
-    updatedAt: req.updatedAt.toISOString(),
-    expiresAt: req.expiresAt.toISOString(),
-    verifiedAt: req.verifiedAt?.toISOString() || null,
-  }));
+  const admins = data.admins;
+  const pendingRequests = data.pendingRequests;
+  const completedRequests = data.completedRequests;
+  const authority = data.authorityExists;
 
   return (
     <div className="space-y-6 md:space-y-8 max-w-[1600px] mx-auto pb-12">
@@ -102,7 +116,7 @@ export default async function AdminsPage() {
             Maintain admin authority and review authentication policy
           </p>
         </div>
-        {!authority && <AdminRequestDialog />}
+        {!authority && <AdminRequestDialog onSuccess={loadDashboard} />}
       </div>
 
       {authority && (
@@ -219,7 +233,7 @@ export default async function AdminsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <AdminRequestsList requests={pendingRequests} />
+            <AdminRequestsList requests={pendingRequests} onVerify={loadDashboard} />
           </CardContent>
         </Card>
       )}

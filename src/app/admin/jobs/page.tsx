@@ -1,4 +1,6 @@
-import prisma from "@/lib/prisma";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
 import {
     Table,
     TableBody,
@@ -9,13 +11,75 @@ import {
 } from "@/components/ui/table";
 import { JobTemplateDialog } from "./JobDialog";
 import { JobOptionDialog } from "./JobOptionDialog";
-import { createJobTemplate, createJobOption } from "./actions";
+import { toast } from "sonner";
+import {
+    CreateJobOption,
+    CreateJobTemplate,
+    GetAllJobs,
+} from "../../../wailsjs/go/main/App";
+import { services, models } from "../../../wailsjs/go/models";
 
-export default async function JobManagerPage() {
-    const templates = await prisma.jobTemplate.findMany({
-        include: { options: true },
-        orderBy: { createdAt: "desc" },
-    });
+export default function JobManagerPage() {
+    const [templates, setTemplates] = useState<models.JobTemplate[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const loadTemplates = useCallback(async () => {
+        try {
+            setLoading(true);
+            const jobs = await GetAllJobs();
+            setTemplates(jobs || []);
+        } catch (err) {
+            console.error("Failed to load job templates:", err);
+            toast.error("Failed to load job templates");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadTemplates();
+    }, [loadTemplates]);
+
+    const handleCreateTemplate = useCallback(async (payload: { title: string; category: string; basePrice: number }) => {
+        if (!payload.title) {
+            toast.error("Job title is required");
+            return;
+        }
+        const res = await CreateJobTemplate(
+            new services.JobTemplateRequest({
+                title: payload.title,
+                category: payload.category || "",
+                basePrice: Number.isFinite(payload.basePrice) ? payload.basePrice : 0,
+                isActive: true,
+            })
+        );
+        if (!res?.success) {
+            toast.error(res?.error || "Failed to create template");
+            return;
+        }
+        toast.success("Template created");
+        await loadTemplates();
+    }, [loadTemplates]);
+
+    const handleCreateOption = useCallback(async (payload: { jobId: string; name: string; additionalCost: number }) => {
+        if (!payload.jobId || !payload.name) {
+            toast.error("Option name is required");
+            return;
+        }
+        const res = await CreateJobOption(
+            new services.JobOptionRequest({
+                jobTemplateId: payload.jobId,
+                name: payload.name,
+                additionalCost: Number.isFinite(payload.additionalCost) ? payload.additionalCost : 0,
+            })
+        );
+        if (!res?.success) {
+            toast.error(res?.error || "Failed to create option");
+            return;
+        }
+        toast.success("Option added");
+        await loadTemplates();
+    }, [loadTemplates]);
 
     return (
         <div className="space-y-4 md:space-y-6 max-w-[1600px] mx-auto pb-12">
@@ -26,7 +90,7 @@ export default async function JobManagerPage() {
                         Manage the POS products/services and their pricing options.
                     </p>
                 </div>
-                <JobTemplateDialog onSubmit={createJobTemplate} />
+                <JobTemplateDialog onSubmit={handleCreateTemplate} />
             </div>
 
             <div className="rounded-2xl md:rounded-[24px] backdrop-blur-xl bg-white/70 dark:bg-black/50 border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden">
@@ -42,6 +106,20 @@ export default async function JobManagerPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
+                        {loading && (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                                    Loading job templates...
+                                </TableCell>
+                            </TableRow>
+                        )}
+                        {!loading && templates.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                                    No job templates found.
+                                </TableCell>
+                            </TableRow>
+                        )}
                         {templates.map((job) => (
                             <TableRow key={job.id} className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors">
                                 <TableCell className="font-medium">{job.title}</TableCell>
@@ -55,7 +133,7 @@ export default async function JobManagerPage() {
                                             </span>
                                         ))}
                                         <div className="pt-2">
-                                            <JobOptionDialog jobId={job.id} onSubmit={createJobOption} />
+                                            <JobOptionDialog jobId={job.id} onSubmit={handleCreateOption} />
                                         </div>
                                     </div>
                                 </TableCell>

@@ -127,6 +127,14 @@ All data lives on the **admin's machine**. Members connect over LAN and have bil
 
 ### Installation
 
+### Quick Start (Windows)
+
+**Simply double-click:** `RUN_APPLICATION.bat`
+
+The batch file automatically handles setup and starts the server.
+
+### Manual Setup (All Platforms)
+
 ```bash
 # 1. Clone the repository
 git clone https://github.com/const-ayush57/AWP-ABCD_WORK_PLATFORM.git
@@ -137,7 +145,7 @@ npm install
 
 # 3. Set up environment variables
 copy .env.example .env
-#  → Edit .env and fill in your NEXTAUTH_SECRET and UPI ID
+#  → Edit .env and set only NEXTAUTH_SECRET (leave UPI ID empty)
 
 # 4. Initialize the database
 npx prisma db push
@@ -147,9 +155,17 @@ npx prisma db seed
 npm run dev
 ```
 
-> **First launch →** Open `http://localhost:3000` and complete the **Admin Bootstrap Wizard** to create your admin account. No default credentials are pre-set.
+### First Launch Checklist
 
-To access from member devices on the same network, use `http://<your-LAN-ip>:3000`.
+1. **Open in browser:** `http://localhost:3000`
+2. **Complete Admin Bootstrap Wizard** to create your master admin account (no default credentials)
+3. **Log in** with the account you just created
+4. **Go to Admin Settings** and add your **Billing UPI ID** (e.g., `8447436163@ybl`)
+   - This will be used automatically for member POS billing QR codes
+   - **No need to edit .env** — all UPI configuration happens in Admin Settings
+5. **Configure host IP and port** if accessing from member devices on the LAN
+
+> To access from member devices on the same network, use `http://<your-LAN-ip>:3000`.
 
 ---
 
@@ -165,8 +181,9 @@ DATABASE_URL="file:./prisma/awp.db"
 NEXTAUTH_SECRET="<your-strong-secret>"
 NEXTAUTH_URL="http://localhost:3000"
 
-# UPI (shown in QR code on POS terminal)
-NEXT_PUBLIC_ADMIN_UPI="your-upi-id@bank"
+# UPI fallback (optional; primary configuration happens in Admin Settings after first login)
+# Leave empty — UPI is managed via Admin Settings > Billing UPI ID
+NEXT_PUBLIC_ADMIN_UPI=""
 
 # SMTP — optional, enables admin email recovery
 SMTP_HOST=smtp.gmail.com
@@ -257,7 +274,7 @@ flowchart TD
 To produce a self-contained Windows installer:
 
 ```bash
-npm run electron:build:win
+npm run package:win
 ```
 
 The build pipeline handles everything automatically:
@@ -270,6 +287,10 @@ The build pipeline handles everything automatically:
 **Output:** `dist/ABCD Work Platform Setup 1.0.5.exe`
 
 End users install once and launch — no Node.js or manual setup required.
+
+After first admin login, open `Admin -> Settings` and configure:
+- Server Host and Port (for LAN member access)
+- **Billing UPI ID** — Configure once here, automatically used for all member POS billing QR codes. Members do not need to set this up individually.
 
 ---
 
@@ -340,7 +361,7 @@ flowchart TD
 | `npx prisma db push` | Sync Prisma schema to SQLite |
 | `npx prisma db seed` | Seed initial data |
 | `npm run smtp:test` | Test SMTP configuration |
-| `npm run electron:build:win` | Build Windows installer |
+| `npm run package:win` | Build Windows installer |
 
 ---
 
