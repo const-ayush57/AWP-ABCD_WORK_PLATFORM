@@ -18,13 +18,13 @@ export function SignOutButton() {
             if (session?.user?.id) {
                 await Logout(session.user.id);
             }
-            localStorage.removeItem("sessionToken");
-            await update();
         } catch (e) {
             console.error(e);
+        } finally {
+            localStorage.removeItem("sessionToken");
+            // Force a hard redirect to the login page to clean Next.js SPA router state and prevent client-side exception crashes
+            window.location.href = "/login/";
         }
-        router.push("/login");
-        router.refresh();
     };
 
     return (

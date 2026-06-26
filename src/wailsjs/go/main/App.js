@@ -78,6 +78,10 @@ export function GetMachineConfig() {
   return window['go']['main']['App']['GetMachineConfig']();
 }
 
+export function GetMemberPassword(arg1, arg2) {
+  return window['go']['main']['App']['GetMemberPassword'](arg1, arg2);
+}
+
 export function GetMembers() {
   return window['go']['main']['App']['GetMembers']();
 }

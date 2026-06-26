@@ -75,10 +75,10 @@ export default function AdminDashboard() {
             </div>
 
             {/* BENTO BOX GRID */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
 
                 {/* Bento Item: Top Performer (Span 2) */}
-                <Card className="rounded-2xl md:rounded-[24px] col-span-2 lg:col-span-2 bg-gradient-to-br from-indigo-900 to-slate-900 border-indigo-500/30 text-white shadow-lg overflow-hidden relative">
+                <Card className="rounded-2xl md:rounded-[24px] col-span-1 sm:col-span-2 lg:col-span-2 bg-gradient-to-br from-indigo-900 to-slate-900 border-indigo-500/30 text-white shadow-lg overflow-hidden relative">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl -mr-10 -mt-10" />
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
                         <CardTitle className="text-xs font-medium uppercase tracking-widest text-indigo-200">Top Performer</CardTitle>
@@ -93,7 +93,7 @@ export default function AdminDashboard() {
                 </Card>
 
                 {/* Bento Item: Today's Revenue */}
-                <Card className="rounded-[24px] backdrop-blur-xl bg-white/70 dark:bg-black/50 border-gray-200 dark:border-white/10 hover:border-emerald-500/50 transition-colors shadow-sm">
+                <Card className="rounded-[24px] backdrop-blur-xl bg-white/70 dark:bg-black/50 border-gray-200 dark:border-white/10 hover:border-emerald-500/50 transition-colors shadow-sm col-span-1">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Today&apos;s Revenue</CardTitle>
                         <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -108,9 +108,8 @@ export default function AdminDashboard() {
                     </CardContent>
                 </Card>
 
-
                 {/* Bento Item: Today's Jobs */}
-                <Card className="rounded-[24px] backdrop-blur-xl bg-white/70 dark:bg-black/50 border-gray-200 dark:border-white/10 shadow-sm">
+                <Card className="rounded-[24px] backdrop-blur-xl bg-white/70 dark:bg-black/50 border-gray-200 dark:border-white/10 shadow-sm col-span-1">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Today&apos;s Jobs</CardTitle>
                         <CheckCircle className="h-4 w-4 text-blue-500" />
@@ -122,7 +121,7 @@ export default function AdminDashboard() {
                 </Card>
 
                 {/* Bento Item: Active Definitions */}
-                <Card className="rounded-[24px] backdrop-blur-xl bg-white/70 dark:bg-black/50 border-gray-200 dark:border-white/10 shadow-sm">
+                <Card className="rounded-[24px] backdrop-blur-xl bg-white/70 dark:bg-black/50 border-gray-200 dark:border-white/10 shadow-sm col-span-1 sm:col-span-2 lg:col-span-1">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Definitions</CardTitle>
                         <FileText className="h-4 w-4 text-purple-500" />

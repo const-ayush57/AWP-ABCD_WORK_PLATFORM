@@ -30,6 +30,18 @@ export default function POSPage() {
             }
         }
         loadData();
+
+        // Start polling active job templates every 5 seconds to keep synced with admin updates
+        const intervalId = setInterval(async () => {
+            try {
+                const tpls = await GetActiveJobTemplates();
+                setTemplates(tpls || []);
+            } catch (e) {
+                console.error("Failed to poll active job templates:", e);
+            }
+        }, 5000);
+
+        return () => clearInterval(intervalId);
     }, [status]);
 
     if (loading || status === "loading") {

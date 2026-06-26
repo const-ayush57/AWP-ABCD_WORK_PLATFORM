@@ -49,6 +49,7 @@ export default function MembersPage() {
                                 <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Operator</TableHead>
                                 <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Status</TableHead>
                                 <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Username (Login ID)</TableHead>
+                                <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Password</TableHead>
                                 <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Role</TableHead>
                                 <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Transactions</TableHead>
                                 <TableHead className="text-right text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Actions</TableHead>
@@ -57,14 +58,14 @@ export default function MembersPage() {
                         <TableBody>
                             {loading && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                                         Loading members...
                                     </TableCell>
                                 </TableRow>
                             )}
                             {!loading && members.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                                         No active members found. Add one to get started!
                                     </TableCell>
                                 </TableRow>

@@ -16,7 +16,6 @@ import {
   Fingerprint, 
   ShieldAlert, 
   User, 
-  Terminal,
   ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,7 +34,6 @@ export default function LoginPage() {
     const [loginType, setLoginType] = useState<"member" | "admin">("member");
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
-    const [totp, setTotp] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [statusLoading, setStatusLoading] = useState(true);
@@ -57,7 +55,6 @@ export default function LoginPage() {
     // Focus state for micro-interactions
     const [usernameFocused, setUsernameFocused] = useState(false);
     const [passwordFocused, setPasswordFocused] = useState(false);
-    const [totpFocused, setTotpFocused] = useState(false);
 
     useEffect(() => {
         const loadBootstrapStatus = async () => {
@@ -106,8 +103,14 @@ export default function LoginPage() {
             return;
         }
 
-        if (!/^\S+@\S+\.\S+$/.test(setupEmail)) {
+        if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(setupEmail)) {
             toast.error("Invalid email", { description: "Please enter a valid recovery email." });
+            return;
+        }
+
+        const emailDomain = setupEmail.split("@")[1]?.toLowerCase();
+        if (emailDomain === "gamil.com" || emailDomain === "gamil.co") {
+            toast.error("Typo in email", { description: "Did you mean gmail.com? Please correct your recovery email." });
             return;
         }
 
@@ -143,6 +146,17 @@ export default function LoginPage() {
 
         if (!recoveryEmail) {
             toast.error("Missing email", { description: "Enter recovery email." });
+            return;
+        }
+
+        if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(recoveryEmail)) {
+            toast.error("Invalid email", { description: "Please enter a valid recovery email." });
+            return;
+        }
+
+        const recoveryDomain = recoveryEmail.split("@")[1]?.toLowerCase();
+        if (recoveryDomain === "gamil.com" || recoveryDomain === "gamil.co") {
+            toast.error("Typo in email", { description: "Did you mean gmail.com? Please correct your recovery email." });
             return;
         }
 
@@ -586,27 +600,7 @@ export default function LoginPage() {
                                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                             </button>
                                         </div>
-                                        {loginType === "admin" && (
-                                            <div className="space-y-2 relative">
-                                                <div 
-                                                    className="absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200"
-                                                    style={{ color: totpFocused ? "#818cf8" : "#6b7280" }}
-                                                >
-                                                    <Terminal size={18} />
-                                                </div>
-                                                <Input
-                                                    id="totp"
-                                                    type="text"
-                                                    placeholder="2FA Token (if configured)"
-                                                    value={totp}
-                                                    onChange={(e) => setTotp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                                                    onFocus={() => setTotpFocused(true)}
-                                                    onBlur={() => setTotpFocused(false)}
-                                                    className="h-12 bg-white/[0.02] hover:bg-white/[0.04] border-white/5 rounded-xl placeholder:text-gray-500 text-white transition-all pl-11 text-center tracking-widest focus:border-indigo-500/50 focus:ring-indigo-500/20 focus:ring-1"
-                                                    maxLength={6}
-                                                />
-                                            </div>
-                                        )}
+                                        {/* 2FA input removed as it is not supported/needed by the backend authentication logic */}
                                         <Button
                                             type="submit"
                                             className={`w-full h-12 rounded-xl text-sm font-bold transition-all duration-300 text-white flex items-center justify-center gap-1.5 select-none ${

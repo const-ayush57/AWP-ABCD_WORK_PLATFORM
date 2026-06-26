@@ -41,6 +41,8 @@ export function GetBootstrapStatus():Promise<services.BootstrapStatusResponse>;
 
 export function GetMachineConfig():Promise<services.MachineConfig>;
 
+export function GetMemberPassword(arg1:string,arg2:string):Promise<services.PasswordResponse>;
+
 export function GetMembers():Promise<Array<models.User>>;
 
 export function GetMembersWithStats():Promise<Array<services.MemberWithStats>>;

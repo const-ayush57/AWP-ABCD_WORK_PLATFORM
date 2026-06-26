@@ -1084,6 +1084,22 @@ export namespace services {
 		    return a;
 		}
 	}
+	export class PasswordResponse {
+	    success: boolean;
+	    error?: string;
+	    data?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PasswordResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.error = source["error"];
+	        this.data = source["data"];
+	    }
+	}
 	export class ResetMemberPasswordRequest {
 	    sessionToken: string;
 	    adminPassword: string;

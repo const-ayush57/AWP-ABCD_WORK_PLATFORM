@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Trash2, X } from "lucide-react";
 import {
     Table,
     TableBody,
@@ -16,6 +17,8 @@ import {
     CreateJobOption,
     CreateJobTemplate,
     GetAllJobs,
+    DeleteJobTemplate,
+    DeleteJobOption,
 } from "../../../wailsjs/go/main/App";
 import { services, models } from "../../../wailsjs/go/models";
 
@@ -81,6 +84,42 @@ export default function JobManagerPage() {
         await loadTemplates();
     }, [loadTemplates]);
 
+    const handleDeleteTemplate = useCallback(async (id: string, title: string) => {
+        if (!window.confirm(`Are you sure you want to delete the job template "${title}"? This will also delete all of its pricing options.`)) {
+            return;
+        }
+        try {
+            const res = await DeleteJobTemplate(id);
+            if (!res?.success) {
+                toast.error(res?.error || "Failed to delete template");
+                return;
+            }
+            toast.success("Job template deleted");
+            await loadTemplates();
+        } catch (err) {
+            console.error("Failed to delete template:", err);
+            toast.error("Failed to delete template");
+        }
+    }, [loadTemplates]);
+
+    const handleDeleteOption = useCallback(async (id: string, name: string) => {
+        if (!window.confirm(`Are you sure you want to delete the option "${name}"?`)) {
+            return;
+        }
+        try {
+            const res = await DeleteJobOption(id);
+            if (!res?.success) {
+                toast.error(res?.error || "Failed to delete option");
+                return;
+            }
+            toast.success("Option deleted");
+            await loadTemplates();
+        } catch (err) {
+            console.error("Failed to delete option:", err);
+            toast.error("Failed to delete option");
+        }
+    }, [loadTemplates]);
+
     return (
         <div className="space-y-4 md:space-y-6 max-w-[1600px] mx-auto pb-12">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -103,19 +142,20 @@ export default function JobManagerPage() {
                             <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Base Price</TableHead>
                             <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Options</TableHead>
                             <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400">Status</TableHead>
+                            <TableHead className="text-xs uppercase tracking-wider font-semibold text-gray-500 dark:text-gray-400 text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading && (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                                     Loading job templates...
                                 </TableCell>
                             </TableRow>
                         )}
                         {!loading && templates.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                                     No job templates found.
                                 </TableCell>
                             </TableRow>
@@ -127,11 +167,20 @@ export default function JobManagerPage() {
                                 <TableCell>₹{job.basePrice.toFixed(2)}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-col space-y-2">
-                                        {job.options.map((opt) => (
-                                            <span key={opt.id} className="text-sm bg-gray-100 dark:bg-white/5 text-gray-800 dark:text-gray-300 rounded px-2 py-1 inline-block w-max">
-                                                {opt.name} (+₹{opt.additionalCost.toFixed(2)})
-                                            </span>
-                                        ))}
+                                        <div className="flex flex-wrap gap-2">
+                                            {job.options.map((opt) => (
+                                                <span key={opt.id} className="inline-flex items-center gap-1.5 text-sm bg-gray-100 dark:bg-white/5 text-gray-800 dark:text-gray-300 rounded px-2 py-1">
+                                                    <span>{opt.name} (+₹{opt.additionalCost.toFixed(2)})</span>
+                                                    <button
+                                                        onClick={() => handleDeleteOption(opt.id, opt.name)}
+                                                        className="text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 p-0.5 transition-colors cursor-pointer"
+                                                        title="Delete Option"
+                                                    >
+                                                        <X className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
                                         <div className="pt-2">
                                             <JobOptionDialog jobId={job.id} onSubmit={handleCreateOption} />
                                         </div>
@@ -146,6 +195,15 @@ export default function JobManagerPage() {
                                     >
                                         {job.isActive ? "Active" : "Inactive"}
                                     </span>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <button
+                                        onClick={() => handleDeleteTemplate(job.id, job.title)}
+                                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
+                                        title="Delete Template"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
                                 </TableCell>
                             </TableRow>
                         ))}

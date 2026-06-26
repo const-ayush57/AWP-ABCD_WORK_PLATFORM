@@ -1,12 +1,32 @@
 "use client";
 
+import { useCallback } from "react";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { AdminAuthDialog } from "./AdminAuthDialog";
+import { GetMemberPassword } from "../../../wailsjs/go/main/App";
+import { Copy } from "lucide-react";
+import { toast } from "sonner";
 import type { services } from "../../../wailsjs/go/models";
 
 type MemberData = services.MemberWithStats;
 
 export function MemberRow({ member, onAction }: { member: MemberData; onAction: () => void }) {
+    const handleCopyPassword = useCallback(async () => {
+        try {
+            const sessionToken = localStorage.getItem("sessionToken") || "";
+            const res = await GetMemberPassword(sessionToken, member.id);
+            if (res.success && res.data) {
+                await navigator.clipboard.writeText(res.data);
+                toast.success("Password copied to clipboard");
+            } else {
+                toast.error(res.error || "Failed to copy password");
+            }
+        } catch (err) {
+            console.error("Failed to copy password:", err);
+            toast.error("Failed to copy password");
+        }
+    }, [member.id]);
+
     return (
         <TableRow className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors">
             <TableCell className="font-medium">
@@ -29,6 +49,18 @@ export function MemberRow({ member, onAction }: { member: MemberData; onAction: 
                 </div>
             </TableCell>
             <TableCell>{member.username}</TableCell>
+            <TableCell>
+                <div className="flex items-center gap-2">
+                    <span className="font-mono text-gray-500 dark:text-gray-400 select-none tracking-widest text-xs">•••</span>
+                    <button
+                        onClick={handleCopyPassword}
+                        className="p-1.5 text-gray-400 hover:text-blue-500 rounded hover:bg-gray-100 dark:hover:bg-white/5 transition-colors cursor-pointer inline-flex items-center justify-center"
+                        title="Copy Password to Clipboard"
+                    >
+                        <Copy className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            </TableCell>
             <TableCell>
                 <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 font-bold px-2 py-1 rounded-[8px] text-[10px] tracking-widest uppercase leading-none">
                     MEMBER
